@@ -1,35 +1,124 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+// ===========================
+// src/App.tsx
+// ===========================
 
-function App() {
-  const [count, setCount] = useState(0)
+import { Routes, Route, Navigate } from "react-router-dom"
+import { useAuth } from "./hooks/useAuth"
+import type { Rol } from "./types"
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+import Landing from "./pages/Landing"
+import Login from "./pages/Login"
+import Registro from "./pages/Registro"
+import Dashboard from "./pages/psicologo/Dashboard"
+import Pacientes from "./pages/psicologo/Paciente"
+import Expedientes from "./pages/psicologo/Expedientes"
+import PerfilPaciente from "./pages/psicologo/PerfilPaciente"
+import PerfilPsicologo from "./pages/psicologo/PerfilPsicologo"
+
+interface RutaProtegidaProps {
+  children: React.ReactNode
+  rolesPermitidos: Rol[]
 }
 
-export default App
+function RutaProtegida({ children, rolesPermitidos }: RutaProtegidaProps) {
+  const { usuario, isAuthenticated } = useAuth()
+
+  if (!isAuthenticated || !usuario) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (!rolesPermitidos.includes(usuario.rol)) {
+    return <Navigate to={`/${usuario.rol}/dashboard`} replace />
+  }
+
+  return <>{children}</>
+}
+
+export default function App() {
+  const { usuario, isAuthenticated } = useAuth()
+
+  return (
+    <Routes>
+
+      {/* Páginas públicas — accesibles sin login */}
+      <Route path="/" element={<Landing />} />
+      <Route path="/registro" element={<Registro />} />
+
+      {/* Login — si ya estás logueado, te manda a tu dashboard */}
+      <Route
+        path="/login"
+        element={
+          isAuthenticated && usuario
+            ? <Navigate to={`/${usuario.rol}/dashboard`} replace />
+            : <Login />
+        }
+      />
+
+      {/* ===== RUTAS DEL PSICÓLOGO ===== */}
+      <Route
+        path="/psicologo/dashboard"
+        element={
+          <RutaProtegida rolesPermitidos={["psicologo"]}>
+            <Dashboard />
+          </RutaProtegida>
+        }
+      />
+      <Route
+        path="/psicologo/pacientes"
+        element={
+          <RutaProtegida rolesPermitidos={["psicologo"]}>
+            <Pacientes />
+          </RutaProtegida>
+        }
+      />
+      <Route
+        path="/psicologo/pacientes/:pacienteId"
+        element={
+          <RutaProtegida rolesPermitidos={["psicologo"]}>
+            <PerfilPaciente />
+          </RutaProtegida>
+        }
+      />
+      <Route
+        path="/psicologo/expedientes/:pacienteId"
+        element={
+          <RutaProtegida rolesPermitidos={["psicologo"]}>
+            <Expedientes />
+          </RutaProtegida>
+        }
+      />
+      <Route
+  path="/psicologo/perfil"
+  element={
+    <RutaProtegida rolesPermitidos={["psicologo"]}>
+      <PerfilPsicologo />
+    </RutaProtegida>
+  }
+/>
+
+      {/* ===== RUTAS DE LA SECRETARIA ===== */}
+      <Route
+        path="/secretaria/dashboard"
+        element={
+          <RutaProtegida rolesPermitidos={["secretaria"]}>
+            <div className="p-8 text-dark font-medium">Dashboard Secretaria (próximamente)</div>
+          </RutaProtegida>
+        }
+      />
+
+      {/* ===== RUTAS DEL PACIENTE ===== */}
+      <Route
+        path="/paciente/dashboard"
+        element={
+          <RutaProtegida rolesPermitidos={["paciente"]}>
+            <div className="p-8 text-dark font-medium">Dashboard Paciente (próximamente)</div>
+          </RutaProtegida>
+        }
+      />
+
+      {/* Cualquier URL inexistente → Landing */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+
+    </Routes>
+  )
+}
