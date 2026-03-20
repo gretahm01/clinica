@@ -82,7 +82,7 @@ export default function Login() {
         }
       }
     } catch {
-      setError("Error de conexión. Intenta de nuevo.")
+      setError("Usuario o contraseña incorrectos. Intenta de nuevo.")
     } finally {
       setLoading(false)
     }
