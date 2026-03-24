@@ -5,7 +5,7 @@ require_once __DIR__ . '/../middleware/auth.php';
 
 // Verificar token y rol
 $usuario = verificarToken();
-verificarRol($usuario, ['psicologa', 'secretaria']);
+verificarRol($usuario, ['psicologo', 'secretaria']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);

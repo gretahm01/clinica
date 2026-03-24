@@ -1,13 +1,16 @@
 // ===========================
 // src/pages/psicologo/Paciente.tsx
 // ===========================
+// Pantalla donde el psicólogo ve y gestiona su lista
+// de pacientes. Desde aquí puede agregar nuevos pacientes
+// y acceder al perfil de cada uno.
+// ===========================
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
 import type { Paciente } from "../../types"
 import ModalNuevoPaciente from "../../components/ui/ModalNuevoPaciente"
-import { getPacientes } from "../../services/api"
 
 function TarjetaPaciente({
   paciente,
@@ -31,11 +34,17 @@ function TarjetaPaciente({
         <div>
           <p className="font-semibold text-dark">
             {paciente.nombre} {paciente.apellido}
+            {/* Muestra apellido materno si existe */}
             {paciente.apellidoMaterno && ` ${paciente.apellidoMaterno}`}
           </p>
           <p className="text-xs text-slate-400">{paciente.email}</p>
         </div>
 
+        {/* 
+          "activo" fue eliminado de la interface Paciente porque
+          no existe como campo en la BD. Todos los pacientes
+          registrados se consideran activos por defecto.
+        */}
         <span className="ml-auto text-xs px-2 py-1 rounded-full font-medium bg-green-50 text-green-600">
           Activo
         </span>
@@ -44,6 +53,7 @@ function TarjetaPaciente({
 
       <div className="flex gap-4 text-xs text-slate-500">
         <span>📞 {paciente.telefono}</span>
+        {/* totalCitas es opcional en la interface, usamos ?? 0 por si no viene */}
         <span>📅 {paciente.totalCitas ?? 0} citas</span>
       </div>
     </div>
@@ -53,34 +63,28 @@ function TarjetaPaciente({
 export default function Pacientes() {
   const navigate = useNavigate()
 
-  // Estados
-  const [pacientes, setPacientes]     = useState<Paciente[]>([])
-  const [busqueda, setBusqueda]       = useState("")
-  const [modalAbierto, setModalAbierto] = useState(false)
-  const [cargando, setCargando]       = useState(true)
-  const [error, setError]             = useState("")
-
-  // Carga los pacientes del backend al entrar a la pantalla
-  useEffect(() => {
-    async function cargarPacientes() {
-      try {
-        const respuesta = await getPacientes()
-        if (respuesta.success) {
-          setPacientes(respuesta.data)
-        } else {
-          setError("No se pudieron cargar los pacientes")
-        }
-      } catch {
-        setError("Error de conexión. Verifica que el servidor esté corriendo.")
-      } finally {
-        setCargando(false)
-      }
+  // Mock actualizado para coincidir con la interface Paciente de types/index.ts
+  // Campos eliminados: activo, psicologoId (no existen en la BD)
+  // Campos nuevos: userId, fechaRegistro, apellidoMaterno
+  const [pacientes] = useState<Paciente[]>([
+    {
+      id: 1,
+      userId: 3,                      // patient.user_id → referencia a tabla user
+      nombre: "Carlos",
+      apellido: "López",
+      apellidoMaterno: "Hernández",   // user.middle_name (opcional)
+      email: "paciente@medtrack.com",
+      telefono: "5599887766",
+      fechaNacimiento: "2000-11-05",
+      fechaRegistro: "2026-03-10",    // patient.registration_date
+      totalCitas: 2,
     }
+  ])
 
-    cargarPacientes()
-  }, []) // [] = solo se ejecuta una vez al cargar la pantalla
+  const [busqueda, setBusqueda] = useState("")
+  const [modalAbierto, setModalAbierto] = useState(false)
 
-  // Filtra pacientes según búsqueda
+  // Filtra pacientes por nombre, apellido o correo según lo que escribe el psicólogo
   const pacientesFiltrados = pacientes.filter((p) => {
     const texto = busqueda.toLowerCase()
     return (
@@ -121,48 +125,32 @@ export default function Pacientes() {
           />
         </div>
 
-        {/* Estado de carga */}
-        {cargando && (
-          <div className="text-center py-16">
-            <p className="text-slate-400">Cargando pacientes...</p>
-          </div>
-        )}
-
-        {/* Error */}
-        {!cargando && error && (
-          <div className="text-center py-16">
-            <p className="text-red-500">{error}</p>
-          </div>
-        )}
-
         {/* Lista de pacientes o mensaje vacío */}
-        {!cargando && !error && (
-          pacientesFiltrados.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-                👥
-              </div>
-              <p className="text-dark font-medium">
-                {busqueda ? "No se encontraron pacientes" : "No hay pacientes registrados"}
-              </p>
-              <p className="text-slate-400 text-sm mt-1">
-                {busqueda
-                  ? "Intenta con otro término de búsqueda"
-                  : "Agrega tu primer paciente con el botón de arriba"
-                }
-              </p>
+        {pacientesFiltrados.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+              👥
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pacientesFiltrados.map((paciente) => (
-                <TarjetaPaciente
-                  key={paciente.id}
-                  paciente={paciente}
-                  onClick={() => navigate(`/psicologo/pacientes/${paciente.id}`)}
-                />
-              ))}
-            </div>
-          )
+            <p className="text-dark font-medium">
+              {busqueda ? "No se encontraron pacientes" : "No hay pacientes registrados"}
+            </p>
+            <p className="text-slate-400 text-sm mt-1">
+              {busqueda
+                ? "Intenta con otro término de búsqueda"
+                : "Agrega tu primer paciente con el botón de arriba"
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pacientesFiltrados.map((paciente) => (
+              <TarjetaPaciente
+                key={paciente.id}
+                paciente={paciente}
+                onClick={() => navigate(`/psicologo/pacientes/${paciente.id}`)}
+              />
+            ))}
+          </div>
         )}
 
       </div>
