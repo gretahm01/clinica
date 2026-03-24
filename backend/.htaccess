@@ -1,4 +1,9 @@
 RewriteEngine On
+
+RewriteBase /MedTrack/medtrack/backend/
+
+# Forzar que todo pase por index.php
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
+
 RewriteRule ^(.*)$ index.php [QSA,L]

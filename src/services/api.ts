@@ -66,9 +66,10 @@ return response.data
 
 // Obtiene la lista de todos los pacientes.
 // El psicólogo y la secretaria usan esta función.
+//NOTA DE GRETA: aquí te cambié el getPacientes para ver la lista de pacientes
 export async function getPacientes() {
-const response = await api.get<ApiResponse<Paciente[]>>("/pacientes")
-return response.data
+    const response = await api.get<ApiResponse<Paciente[]>>("/pacientes")
+    return response.data
 }
 
 // Obtiene un paciente específico por su ID.
