@@ -19,7 +19,7 @@ import type { ApiResponse, Usuario, Paciente, Cita } from "../types"
 // Cuando el proyecto pase a producción (servidor real),
 // solo cambias esta línea y todo funciona.
 const api = axios.create({
-  baseURL: "http://localhost/MedTrack/medtrack/backend",  // URL de tu compañero de PHP
+  baseURL: "http://localhost/MedTrack/clinica/backend", 
 headers: {
     "Content-Type": "application/json"       // le decimos a PHP que mandamos JSON
 }
