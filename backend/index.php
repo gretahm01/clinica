@@ -2,10 +2,12 @@
 require_once __DIR__ . '/config/headers.php';
 
 $url    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$partes = explode('/', trim($url, '/'));
+$ruta   = substr($url, strpos($url, 'backend') + strlen('backend'));
+$ruta   = trim($ruta, '/');
+$partes = explode('/', $ruta);
 
-$modulo = $partes[3] ?? '';
-$accion = $partes[4] ?? '';
+$modulo = $partes[0] ?? '';
+$accion = $partes[1] ?? '';
 
 switch ($modulo) {
     case 'auth':
@@ -19,11 +21,15 @@ switch ($modulo) {
         }
         break;
 
+    case 'pacientes':
+        require __DIR__ . '/routes/pacientes.php';
+        break;
+
     case '':
         echo json_encode([
             "success" => true,
             "message" => "✅ Backend MedTrack funcionando",
-            "rutas"   => ["POST /api/auth/login"]
+            "rutas"   => ["POST /api/auth/login", "GET /pacientes"]
         ]);
         break;
 
