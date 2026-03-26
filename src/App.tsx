@@ -31,7 +31,7 @@ import DetalleTarea    from "./pages/psicologo/DetalleTarea"
 import DashboardPaciente    from "./pages/paciente/DashboardPaciente"
 import DetalleCita          from "./pages/paciente/DetalleCita"
 import DetalleTareaPaciente from "./pages/paciente/Detalletareapaciente"
-
+import PerfilPacientePage from "./pages/paciente/PerfilPacientePage"
 
 // ===========================
 // RUTA PROTEGIDA
@@ -189,6 +189,15 @@ export default function App() {
           </RutaProtegida>
         }
       />
+
+      <Route
+  path="/paciente/perfil"
+  element={
+    <RutaProtegida rolesPermitidos={["paciente"]}>
+      <PerfilPacientePage />
+    </RutaProtegida>
+  }
+/>
 
       {/* Cualquier URL que no exista → Landing */}
       <Route path="*" element={<Navigate to="/" replace />} />
