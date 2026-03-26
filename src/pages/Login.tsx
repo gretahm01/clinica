@@ -226,6 +226,23 @@ export default function Login() {
           Entrar como psicólogo (dev)
         </button>
 
+          {/* SOLO PARA DESARROLLO - borrar cuando PHP esté listo */}
+<button
+  onClick={() => {
+    login({
+      userId: 3,
+      nombre: "Carlos",
+      apellido: "López",
+      email: "paciente@medtrack.com",
+      rol: "paciente",
+      token: "fake-token-dev"
+    })
+    navigate("/paciente/dashboard")
+  }}
+  className="w-full mt-2 border border-slate-200 text-slate-400 text-sm py-2 rounded-lg hover:bg-slate-50 transition-colors"
+>
+  Entrar como paciente (dev)
+</button>
       </div>
     </div>
   )
