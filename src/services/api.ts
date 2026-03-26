@@ -49,7 +49,7 @@ import type {
 // PRODUCCIÓN: Cuando suban el proyecto a un servidor real,
 // solo cambian la baseURL aquí y todo funciona.
 const api = axios.create({
-  baseURL: "http://localhost/MedTrack/medtrack/backend",
+  baseURL: "http://localhost/MedTrack/clinica/backend",
   headers: {
     "Content-Type": "application/json", // le decimos a PHP que mandamos y esperamos JSON
   },

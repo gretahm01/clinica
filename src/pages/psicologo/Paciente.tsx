@@ -1,16 +1,14 @@
 // ===========================
 // src/pages/psicologo/Paciente.tsx
 // ===========================
-// Pantalla donde el psicólogo ve y gestiona su lista
-// de pacientes. Desde aquí puede agregar nuevos pacientes
-// y acceder al perfil de cada uno.
-// ===========================
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
 import type { Paciente } from "../../types"
+import { getPacientes, crearPaciente } from "../../services/api"
 import ModalNuevoPaciente from "../../components/ui/ModalNuevoPaciente"
+import type { DatosPaciente } from "../../components/ui/ModalNuevoPaciente"
 
 function TarjetaPaciente({
   paciente,
@@ -25,35 +23,22 @@ function TarjetaPaciente({
       className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 hover:border-primary hover:shadow-md transition-all cursor-pointer"
     >
       <div className="flex items-center gap-3 mb-3">
-
-        {/* Avatar con iniciales del paciente */}
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
           {paciente.nombre[0]}{paciente.apellido[0]}
         </div>
-
         <div>
           <p className="font-semibold text-dark">
             {paciente.nombre} {paciente.apellido}
-            {/* Muestra apellido materno si existe */}
             {paciente.apellidoMaterno && ` ${paciente.apellidoMaterno}`}
           </p>
           <p className="text-xs text-slate-400">{paciente.email}</p>
         </div>
-
-        {/* 
-          "activo" fue eliminado de la interface Paciente porque
-          no existe como campo en la BD. Todos los pacientes
-          registrados se consideran activos por defecto.
-        */}
         <span className="ml-auto text-xs px-2 py-1 rounded-full font-medium bg-green-50 text-green-600">
           Activo
         </span>
-
       </div>
-
       <div className="flex gap-4 text-xs text-slate-500">
         <span>📞 {paciente.telefono}</span>
-        {/* totalCitas es opcional en la interface, usamos ?? 0 por si no viene */}
         <span>📅 {paciente.totalCitas ?? 0} citas</span>
       </div>
     </div>
@@ -63,28 +48,53 @@ function TarjetaPaciente({
 export default function Pacientes() {
   const navigate = useNavigate()
 
-  // Mock actualizado para coincidir con la interface Paciente de types/index.ts
-  // Campos eliminados: activo, psicologoId (no existen en la BD)
-  // Campos nuevos: userId, fechaRegistro, apellidoMaterno
-  const [pacientes] = useState<Paciente[]>([
-    {
-      id: 1,
-      userId: 3,                      // patient.user_id → referencia a tabla user
-      nombre: "Carlos",
-      apellido: "López",
-      apellidoMaterno: "Hernández",   // user.middle_name (opcional)
-      email: "paciente@medtrack.com",
-      telefono: "5599887766",
-      fechaNacimiento: "2000-11-05",
-      fechaRegistro: "2026-03-10",    // patient.registration_date
-      totalCitas: 2,
-    }
-  ])
-
+  const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [busqueda, setBusqueda] = useState("")
   const [modalAbierto, setModalAbierto] = useState(false)
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState("")
+  const [guardando, setGuardando] = useState(false)
 
-  // Filtra pacientes por nombre, apellido o correo según lo que escribe el psicólogo
+  // Carga la lista de pacientes al entrar a la pantalla
+  useEffect(() => {
+    cargarPacientes()
+  }, [])
+
+  async function cargarPacientes() {
+    try {
+      setCargando(true)
+      setError("")
+      const respuesta = await getPacientes()
+      if (respuesta.success) {
+        setPacientes(respuesta.data)
+      } else {
+        setError("No se pudieron cargar los pacientes")
+      }
+    } catch {
+      setError("Error de conexión con el servidor")
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  async function handleGuardar(datos: DatosPaciente) {
+    try {
+      setGuardando(true)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const respuesta = await crearPaciente(datos as any)
+      if (respuesta.success) {
+        setModalAbierto(false)
+        await cargarPacientes() // recarga la lista con el nuevo paciente
+      } else {
+        alert(respuesta.message ?? "Error al registrar el paciente")
+      }
+    } catch  {
+      alert("Error de conexión al guardar el paciente")
+    } finally {
+      setGuardando(false)
+    }
+  }
+
   const pacientesFiltrados = pacientes.filter((p) => {
     const texto = busqueda.toLowerCase()
     return (
@@ -125,8 +135,23 @@ export default function Pacientes() {
           />
         </div>
 
-        {/* Lista de pacientes o mensaje vacío */}
-        {pacientesFiltrados.length === 0 ? (
+        {/* Estados: cargando / error / lista */}
+        {cargando ? (
+          <div className="text-center py-16">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-slate-400 text-sm">Cargando pacientes...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-16">
+            <p className="text-red-500 font-medium">{error}</p>
+            <button
+              onClick={cargarPacientes}
+              className="mt-3 text-sm text-primary hover:underline"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : pacientesFiltrados.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
               👥
@@ -158,11 +183,8 @@ export default function Pacientes() {
       <ModalNuevoPaciente
         abierto={modalAbierto}
         onCerrar={() => setModalAbierto(false)}
-        onGuardar={(datos) => {
-          console.log("Guardar paciente:", datos)
-          // TODO: llamar a crearPaciente(datos) de src/services/api.ts
-          setModalAbierto(false)
-        }}
+        onGuardar={handleGuardar}
+        guardando={guardando}
       />
     </div>
   )
