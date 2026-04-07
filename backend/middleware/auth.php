@@ -2,26 +2,26 @@
 function crearToken($datos) {
     $secret = "medtrack_clave_secreta_2024";
 
-    $header = base64_encode(json_encode([
+    $header = rtrim(base64_encode(json_encode([
         "alg" => "HS256",
         "typ" => "JWT"
-    ]));
+    ])), '=');
 
-    $payload = base64_encode(json_encode([
+    $payload = rtrim(base64_encode(json_encode([
         "userId"   => $datos['userId'],
         "email"    => $datos['email'],
         "rol"      => $datos['rol'],
         "nombre"   => $datos['nombre'],
         "apellido" => $datos['apellido'],
         "exp"      => time() + (8 * 60 * 60)
-    ]));
+    ])), '=');
 
-    $firma = base64_encode(hash_hmac(
+    $firma = rtrim(base64_encode(hash_hmac(
         "sha256",
         "$header.$payload",
         $secret,
         true
-    ));
+    )), '=');
 
     return "$header.$payload.$firma";
 }
@@ -32,10 +32,7 @@ function verificarToken() {
 
     if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
         http_response_code(401);
-        echo json_encode([
-            "success" => false,
-            "message" => "Token no proporcionado. Inicia sesión."
-        ]);
+        echo json_encode(["success" => false, "message" => "Token no proporcionado. Inicia sesión."]);
         exit();
     }
 
@@ -50,7 +47,7 @@ function verificarToken() {
 
     [$header, $payload, $firma] = $partes;
 
-    $firmaEsperada = base64_encode(hash_hmac("sha256", "$header.$payload", $secret, true));
+    $firmaEsperada = rtrim(base64_encode(hash_hmac("sha256", "$header.$payload", $secret, true)), '=');
 
     if ($firma !== $firmaEsperada) {
         http_response_code(401);
@@ -72,10 +69,7 @@ function verificarToken() {
 function verificarRol($usuario, $rolesPermitidos) {
     if (!in_array($usuario['rol'], $rolesPermitidos)) {
         http_response_code(403);
-        echo json_encode([
-            "success" => false,
-            "message" => "No tienes permiso para hacer esto"
-        ]);
+        echo json_encode(["success" => false, "message" => "No tienes permiso para hacer esto"]);
         exit();
     }
 }

@@ -208,24 +208,7 @@ export default function Login() {
 
         </form>
 
-        {/* SOLO PARA DESARROLLO - borrar cuando PHP esté listo */}
-        <button
-          onClick={() => {
-            login({
-              userId: 1,
-              nombre: "Admin",
-              apellido: "Test",
-              email: "test@test.com",
-              rol: "psicologo",
-              token: "fake-token-dev"
-            })
-            navigate("/psicologo/dashboard")
-          }}
-          className="w-full mt-2 border border-slate-200 text-slate-400 text-sm py-2 rounded-lg hover:bg-slate-50 transition-colors"
-        >
-          Entrar como psicólogo (dev)
-        </button>
-
+        
       </div>
     </div>
   )

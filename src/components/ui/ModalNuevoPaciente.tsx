@@ -36,12 +36,14 @@ interface ModalNuevoPacienteProps {
   abierto: boolean
   onCerrar: () => void
   onGuardar: (datos: DatosPaciente) => void
+  guardando?: boolean
 }
 
 export default function ModalNuevoPaciente({
   abierto,
   onCerrar,
   onGuardar,
+  guardando = false,
 }: ModalNuevoPacienteProps) {
 
   const [nombre, setNombre]                   = useState("")
@@ -303,9 +305,10 @@ export default function ModalNuevoPaciente({
           </button>
           <button
             onClick={handleGuardar}
-            className="flex-1 bg-primary hover:bg-primary-hover text-white py-2.5 rounded-lg transition-colors font-medium"
+            disabled={guardando}
+            className="flex-1 bg-primary hover:bg-primary-hover text-white py-2.5 rounded-lg transition-colors font-medium disabled:opacity-60"
           >
-            Registrar paciente
+            {guardando ? "Registrando..." : "Registrar paciente"}
           </button>
         </div>
 
