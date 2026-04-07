@@ -90,9 +90,7 @@ export default function PerfilPaciente() {
 
   const proximaCita = citas.find(c => c.estado === "confirmada")
 
-  // ===========================
   // ESTADO DEL MODAL RETROALIMENTACIÓN
-  // ===========================
   // citaSeleccionada guarda la cita sobre la que se está escribiendo feedback
   const [citaSeleccionada, setCitaSeleccionada] = useState<Cita | null>(null)
 
