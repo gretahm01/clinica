@@ -32,6 +32,10 @@ switch ($modulo) {
             "rutas"   => ["POST /api/auth/login", "GET /pacientes"]
         ]);
         break;
+        
+    case 'citas':
+    require __DIR__ . '/routes/citas.php';
+    break;
 
     default:
         http_response_code(404);

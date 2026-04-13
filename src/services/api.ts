@@ -212,6 +212,11 @@ export async function cancelarCita(id: number) {
   return response.data
 }
 
+export async function confirmarCita(id: number) {
+  const response = await api.put<ApiResponse<Cita>>(`/citas/${id}/confirmar`, {})
+  return response.data
+}
+
 // Guarda el feedback/retroalimentación del psicólogo en una cita.
 // PHP actualiza appointment.feedback por appointment_id.
 //

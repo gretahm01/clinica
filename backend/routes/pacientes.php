@@ -46,7 +46,7 @@ if ($method === 'GET' && $pacienteId === null) {
             u.phone             AS telefono,
             u.birth_date        AS fechaNacimiento,
             p.registration_date AS fechaRegistro,
-            COUNT(a.appointment_id) AS totalCitas
+            COUNT(CASE WHEN a.status != 'cancelada' THEN 1 END) AS totalCitas
         FROM patient p
         JOIN user u ON p.user_id = u.user_id
         LEFT JOIN appointment a ON a.patient_id = p.patient_id

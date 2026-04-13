@@ -7,7 +7,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
 import type { Paciente, Cita, Tarea, EstadoCita } from "../../types"
 import ModalNuevaTarea, { type DatosTarea } from "../../components/ui/ModalNuevaTarea"
-import { getPaciente } from "../../services/api"
+import { getPaciente, getCitasPorPaciente, cancelarCita, confirmarCita } from "../../services/api"
 
 function calcularEdad(fechaNacimiento: string) {
   const hoy = new Date()
@@ -41,8 +41,6 @@ export default function PerfilPaciente() {
   const [paciente, setPaciente] = useState<Paciente | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState("")
-
-  // Citas y tareas siguen en mock por ahora — se conectarán cuando PHP tenga esas rutas
   const [citas, setCitas] = useState<Cita[]>([])
   const tareas: Tarea[] = []
 
@@ -52,19 +50,38 @@ export default function PerfilPaciente() {
   const [loadingFeedback, setLoadingFeedback] = useState(false)
   const [exitoFeedback, setExitoFeedback] = useState(false)
 
+  // Estados para cancelar cita
+  const [citaACancelar, setCitaACancelar] = useState<Cita | null>(null)
+  const [loadingCancelar, setLoadingCancelar] = useState(false)
+
+  // Estados para confirmar cita
+  const [citaAConfirmar, setCitaAConfirmar] = useState<Cita | null>(null)
+const [loadingConfirmar, setLoadingConfirmar] = useState(false)
+
   const proximaCita = citas.find(c => c.estado === "confirmada")
 
   useEffect(() => {
     if (!pacienteId) return
     cargarPaciente()
+    cargarCitas()
   }, [pacienteId])
+
+  async function cargarCitas() {
+    try {
+      const respuesta = await getCitasPorPaciente(Number(pacienteId))
+      if (respuesta.success) {
+        setCitas(respuesta.data)
+      }
+    } catch {
+      console.error("Error al cargar citas")
+    }
+  }
 
   async function cargarPaciente() {
     try {
       setCargando(true)
       setError("")
       const respuesta = await getPaciente(Number(pacienteId))
-      console.log("Respuesta del backend:", respuesta)
       if (respuesta.success) {
         setPaciente(respuesta.data)
       } else {
@@ -76,6 +93,46 @@ export default function PerfilPaciente() {
       setCargando(false)
     }
   }
+
+  async function handleCancelarCita() {
+    if (!citaACancelar) return
+    setLoadingCancelar(true)
+    try {
+      const respuesta = await cancelarCita(citaACancelar.id)
+      if (respuesta.success) {
+        setCitas(prev => prev.map(c =>
+          c.id === citaACancelar.id ? { ...c, estado: "cancelada" as EstadoCita } : c
+        ))
+        setCitaACancelar(null)
+      } else {
+        alert(respuesta.message ?? "Error al cancelar la cita")
+      }
+    } catch {
+      alert("Error de conexión al cancelar la cita")
+    } finally {
+      setLoadingCancelar(false)
+    }
+  }
+
+  async function handleConfirmarCita() {
+  if (!citaAConfirmar) return
+  setLoadingConfirmar(true)
+  try {
+    const respuesta = await confirmarCita(citaAConfirmar.id)
+    if (respuesta.success) {
+      setCitas(prev => prev.map(c =>
+        c.id === citaAConfirmar.id ? { ...c, estado: "confirmada" as EstadoCita } : c
+      ))
+      setCitaAConfirmar(null)
+    } else {
+      alert(respuesta.message ?? "Error al confirmar la cita")
+    }
+  } catch {
+    alert("Error de conexión al confirmar la cita")
+  } finally {
+    setLoadingConfirmar(false)
+  }
+}
 
   function abrirModalFeedback(cita: Cita) {
     setCitaSeleccionada(cita)
@@ -105,7 +162,6 @@ export default function PerfilPaciente() {
     }
   }
 
-  // Estados de carga / error
   if (cargando) {
     return (
       <div className="min-h-screen bg-background">
@@ -144,7 +200,6 @@ export default function PerfilPaciente() {
           ← Volver a pacientes
         </button>
 
-        {/* Header del perfil */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -175,7 +230,6 @@ export default function PerfilPaciente() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* Columna izquierda */}
           <div className="flex flex-col gap-4">
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="font-semibold text-dark mb-4">Información personal</h3>
@@ -197,14 +251,12 @@ export default function PerfilPaciente() {
               </div>
             </div>
 
-            {/* Contacto de emergencia — mock por ahora */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="font-semibold text-dark mb-4">Contacto de emergencia</h3>
               <p className="text-xs text-slate-400">Por conectar con PHP</p>
             </div>
           </div>
 
-          {/* Columna derecha */}
           <div className="lg:col-span-2 flex flex-col gap-6">
 
             {/* CITAS */}
@@ -218,12 +270,15 @@ export default function PerfilPaciente() {
               ) : (
                 <div className="flex flex-col gap-3">
                   {citas.map((cita) => (
-                    <button
+                    <div
                       key={cita.id}
-                      onClick={() => abrirModalFeedback(cita)}
-                      className="flex items-center justify-between p-3 bg-background rounded-xl hover:bg-slate-100 transition-colors text-left w-full group"
+                      className="flex items-center justify-between p-3 bg-background rounded-xl"
                     >
-                      <div>
+                      {/* Info — al picar abre feedback */}
+                      <button
+                        onClick={() => abrirModalFeedback(cita)}
+                        className="flex-1 text-left hover:opacity-80 transition-opacity"
+                      >
                         <p className="text-sm font-medium text-dark">
                           {new Date(cita.fecha + "T12:00:00").toLocaleDateString("es-MX", {
                             weekday: "long", year: "numeric", month: "long", day: "numeric"
@@ -233,11 +288,33 @@ export default function PerfilPaciente() {
                         {cita.feedback && (
                           <p className="text-xs text-primary mt-1 truncate max-w-xs">💬 {cita.feedback}</p>
                         )}
+                      </button>
+
+                      {/* Badge + botón cancelar */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${colorEstadoCita(cita.estado)}`}>
+                          {cita.estado}
+                        </span>
+                      
+                      {cita.estado === "pendiente" && (
+                        <button
+                          onClick={() => setCitaAConfirmar(cita)}
+                          className="text-xs text-green-500 hover:text-green-700 font-medium px-2 py-1 rounded-lg hover:bg-green-50 transition-colors"
+                        >
+                          Confirmar
+                        </button>
+                      )}
+                      {cita.estado !== "cancelada" && (
+                        <button
+                          onClick={() => setCitaACancelar(cita)}
+                          className="text-xs text-red-400 hover:text-red-600 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${colorEstadoCita(cita.estado)}`}>
-                        {cita.estado}
-                      </span>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -296,6 +373,7 @@ export default function PerfilPaciente() {
         proximaCitaFecha={proximaCita?.fecha}
       />
 
+      {/* MODAL RETROALIMENTACIÓN */}
       {citaSeleccionada && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={cerrarModalFeedback}>
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
@@ -345,6 +423,79 @@ export default function PerfilPaciente() {
           </div>
         </div>
       )}
+
+      {/* MODAL CONFIRMAR CANCELAR CITA */}
+      {citaACancelar && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-dark text-center mb-1">¿Cancelar esta cita?</h3>
+            <p className="text-slate-500 text-sm text-center mb-1">
+              {new Date(citaACancelar.fecha + "T12:00:00").toLocaleDateString("es-MX", {
+                weekday: "long", year: "numeric", month: "long", day: "numeric"
+              })}
+            </p>
+            <p className="text-slate-400 text-xs text-center mb-6">{citaACancelar.hora} hrs</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCitaACancelar(null)}
+                disabled={loadingCancelar}
+                className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm"
+              >
+                No cancelar
+              </button>
+              <button
+                onClick={handleCancelarCita}
+                disabled={loadingCancelar}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white py-2.5 rounded-xl transition-colors font-medium text-sm"
+              >
+                {loadingCancelar ? "Cancelando..." : "Sí, cancelar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+        {/* MODAL CONFIRMAR CONFIRMAR CITA */}
+        {citaAConfirmar && (
+  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+      <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-bold text-dark text-center mb-1">¿Confirmar esta cita?</h3>
+      <p className="text-slate-500 text-sm text-center mb-1">
+        {new Date(citaAConfirmar.fecha + "T12:00:00").toLocaleDateString("es-MX", {
+          weekday: "long", year: "numeric", month: "long", day: "numeric"
+        })}
+      </p>
+      <p className="text-slate-400 text-xs text-center mb-6">{citaAConfirmar.hora} hrs</p>
+      <div className="flex gap-3">
+        <button
+          onClick={() => setCitaAConfirmar(null)}
+          disabled={loadingConfirmar}
+          className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleConfirmarCita}
+          disabled={loadingConfirmar}
+          className="flex-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-2.5 rounded-xl transition-colors font-medium text-sm"
+        >
+          {loadingConfirmar ? "Confirmando..." : "Sí, confirmar"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   )
 }
