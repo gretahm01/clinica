@@ -32,6 +32,7 @@ import DashboardPaciente    from "./pages/paciente/DashboardPaciente"
 import DetalleCita          from "./pages/paciente/DetalleCita"
 import DetalleTareaPaciente from "./pages/paciente/Detalletareapaciente"
 import PerfilPacientePage from "./pages/paciente/PerfilPacientePage"
+import CalendarioPaciente from "./pages/paciente/CalendarioPaciente"
 
 // ===========================
 // RUTA PROTEGIDA
@@ -195,6 +196,17 @@ export default function App() {
   element={
     <RutaProtegida rolesPermitidos={["paciente"]}>
       <PerfilPacientePage />
+    </RutaProtegida>
+  }
+/>
+
+
+
+<Route
+  path="/paciente/calendario"
+  element={
+    <RutaProtegida rolesPermitidos={["paciente"]}>
+      <CalendarioPaciente />
     </RutaProtegida>
   }
 />
