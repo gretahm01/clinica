@@ -403,7 +403,7 @@ const [loadingConfirmar, setLoadingConfirmar] = useState(false)
                   onChange={e => setTextoFeedback(e.target.value)}
                   placeholder="Escribe observaciones para el paciente..."
                   rows={5}
-                  autoFocus
+      autoFocus
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-dark placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
                 />
                 <div className="flex gap-3 mt-4">

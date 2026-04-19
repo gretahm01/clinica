@@ -39,8 +39,6 @@ const TIPOS_CITA = [
 ]
 
 const DURACIONES = [
-    { label: "30 minutos", valor: 30 },
-    { label: "45 minutos", valor: 45 },
     { label: "1 hora", valor: 60 },
     { label: "1.5 horas", valor: 90 },
 ]
@@ -69,6 +67,11 @@ export default function ModalNuevaCita({
     if (!pacienteId) return setError("Selecciona un paciente")
     if (!fecha) return setError("Selecciona una fecha")
     if (!hora) return setError("Selecciona una hora")
+
+        const diaSemana = new Date(fecha + "T12:00:00").getDay()
+            if (diaSemana === 0 || diaSemana === 6) {
+            return setError("Solo se pueden agendar citas de lunes a viernes")
+        }
 
     onGuardar({
         pacienteId: pacienteId as number,
@@ -163,12 +166,32 @@ export default function ModalNuevaCita({
             <label className="block text-sm font-medium text-dark mb-1">
                 Hora
             </label>
-            <input
-                type="time"
-                value={hora}
-                onChange={(e) => setHora(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-dark focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+        <select
+            value={hora}
+            onChange={(e) => setHora(e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-dark focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+            <option value="">Seleccionar hora...</option>
+            <option value="10:00">10:00 am</option>
+            <option value="10:30">10:30 am</option>
+            <option value="11:00">11:00 am</option>
+            <option value="11:30">11:30 am</option>
+            <option value="12:00">12:00 pm</option>
+            <option value="12:30">12:30 pm</option>
+            <option value="13:00">1:00 pm</option>
+            <option value="13:30">1:30 pm</option>
+            <option value="14:00">2:00 pm</option>
+            <option value="14:30">2:30 pm</option>
+            <option value="15:00">3:00 pm</option>
+            <option value="15:30">3:30 pm</option>
+            <option value="16:00">4:00 pm</option>
+            <option value="16:30">4:30 pm</option>
+            <option value="17:00">5:00 pm</option>
+            <option value="17:30">5:30 pm</option>
+            <option value="18:00">6:00 pm</option>
+            <option value="18:30">6:30 pm</option>
+            <option value="19:00">7:00 pm</option>
+        </select>
             </div>
         </div>
 
@@ -231,6 +254,7 @@ export default function ModalNuevaCita({
         <button
             onClick={handleGuardar}
             className="flex-1 bg-primary hover:bg-primary-hover text-white py-2.5 rounded-lg transition-colors font-medium"
+                
         >
             Agendar cita
         </button>

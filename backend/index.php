@@ -36,6 +36,9 @@ switch ($modulo) {
     case 'citas':
     require __DIR__ . '/routes/citas.php';
     break;
+    case 'profesional':
+    require __DIR__ . '/routes/profesional.php';
+    break;
 
     default:
         http_response_code(404);

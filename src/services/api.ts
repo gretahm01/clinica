@@ -333,12 +333,9 @@ export async function actualizarPerfilPsicologo(datos: Partial<Profesional>) {
 // PHP verifica que contrasenaActual sea correcta antes de actualizar.
 //
 // Se usa en: PerfilPsicologo.tsx → modal de cambiar contraseña
-export async function cambiarContrasena(
-  contrasenaActual: string,
-  contrasenaNueva: string
-) {
-  const response = await api.put<ApiResponse<{ mensaje: string }>>(
-    "/auth/cambiar-contrasena",
+export async function cambiarContrasena(contrasenaActual: string, contrasenaNueva: string) {
+  const response = await api.patch<ApiResponse<{ mensaje: string }>>(
+    "/profesional/cambiar-contrasena",
     { contrasenaActual, contrasenaNueva }
   )
   return response.data
@@ -387,3 +384,16 @@ export async function solicitarAcceso(datos: DatosSolicitudRegistro) {
   )
   return response.data
 }
+
+//mostrar citas del día en el dashboard lateral derecho
+export async function getCitasHoy() {
+  const response = await api.get<ApiResponse<{
+    id: number
+    hora: string
+    estado: string
+    nombre: string
+    apellido: string
+  }[]>>("/citas/hoy")
+  return response.data
+}
+
