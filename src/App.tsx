@@ -1,15 +1,6 @@
 // ===========================
 // src/App.tsx
 // ===========================
-// Archivo principal de rutas de la aplicación.
-// Aquí se define a qué componente lleva cada URL.
-//
-// RutaProtegida verifica que el usuario esté logueado
-// y que tenga el rol correcto antes de mostrar la página.
-// Si no está logueado → manda al login
-// Si tiene rol incorrecto → manda a su propio dashboard
-// ===========================
-
 import { Routes, Route, Navigate } from "react-router-dom"
 import { useAuth } from "./hooks/useAuth"
 import type { Rol } from "./types"
@@ -31,13 +22,16 @@ import DetalleTarea    from "./pages/psicologo/DetalleTarea"
 import DashboardPaciente    from "./pages/paciente/DashboardPaciente"
 import DetalleCita          from "./pages/paciente/DetalleCita"
 import DetalleTareaPaciente from "./pages/paciente/Detalletareapaciente"
-import PerfilPacientePage from "./pages/paciente/PerfilPacientePage"
-import CalendarioPaciente from "./pages/paciente/CalendarioPaciente"
+import PerfilPacientePage   from "./pages/paciente/PerfilPacientePage"
+import CalendarioPaciente   from "./pages/paciente/CalendarioPaciente"
+
+// ===== PÁGINAS DE LA SECRETARIA =====
+import DashboardSecretaria  from "./pages/secretaria/DashboardSecretaria"
+import PacientesSecretaria  from "./pages/secretaria/PacienteSecretaria"
+import CalendarioSecretaria from "./pages/secretaria/CalendarioSecretaria"
 
 // ===========================
 // RUTA PROTEGIDA
-// Componente que envuelve páginas que requieren autenticación.
-// rolesPermitidos define qué roles pueden ver esa página.
 // ===========================
 interface RutaProtegidaProps {
   children: React.ReactNode
@@ -47,19 +41,16 @@ interface RutaProtegidaProps {
 function RutaProtegida({ children, rolesPermitidos }: RutaProtegidaProps) {
   const { usuario, isAuthenticated } = useAuth()
 
-  // Si no está logueado → manda al login
   if (!isAuthenticated || !usuario) {
     return <Navigate to="/login" replace />
   }
 
-  // Si su rol no está permitido → manda a su propio dashboard
   if (!rolesPermitidos.includes(usuario.rol)) {
     return <Navigate to={`/${usuario.rol}/dashboard`} replace />
   }
 
   return <>{children}</>
 }
-
 
 // ===========================
 // RUTAS DE LA APP
@@ -70,11 +61,9 @@ export default function App() {
   return (
     <Routes>
 
-      {/* ===== PÁGINAS PÚBLICAS — sin login ===== */}
+      {/* ===== PÁGINAS PÚBLICAS ===== */}
       <Route path="/"         element={<Landing />} />
       <Route path="/registro" element={<Registro />} />
-
-      {/* Login — si ya estás logueado te manda a tu dashboard */}
       <Route
         path="/login"
         element={
@@ -85,133 +74,53 @@ export default function App() {
       />
 
       {/* ===== RUTAS DEL PSICÓLOGO ===== */}
-
-      {/* Dashboard principal con calendario */}
-      <Route
-        path="/psicologo/dashboard"
-        element={
-          <RutaProtegida rolesPermitidos={["psicologo"]}>
-            <Dashboard />
-          </RutaProtegida>
-        }
+      <Route path="/psicologo/dashboard"
+        element={<RutaProtegida rolesPermitidos={["psicologo"]}><Dashboard /></RutaProtegida>}
       />
-
-      {/* Lista de pacientes */}
-      <Route
-        path="/psicologo/pacientes"
-        element={
-          <RutaProtegida rolesPermitidos={["psicologo"]}>
-            <Pacientes />
-          </RutaProtegida>
-        }
+      <Route path="/psicologo/pacientes"
+        element={<RutaProtegida rolesPermitidos={["psicologo"]}><Pacientes /></RutaProtegida>}
       />
-
-      {/* Perfil completo de un paciente específico */}
-      <Route
-        path="/psicologo/pacientes/:pacienteId"
-        element={
-          <RutaProtegida rolesPermitidos={["psicologo"]}>
-            <PerfilPaciente />
-          </RutaProtegida>
-        }
+      <Route path="/psicologo/pacientes/:pacienteId"
+        element={<RutaProtegida rolesPermitidos={["psicologo"]}><PerfilPaciente /></RutaProtegida>}
       />
-
-      {/* Expediente clínico de un paciente */}
-      <Route
-        path="/psicologo/expedientes/:pacienteId"
-        element={
-          <RutaProtegida rolesPermitidos={["psicologo"]}>
-            <Expedientes />
-          </RutaProtegida>
-        }
+      <Route path="/psicologo/expedientes/:pacienteId"
+        element={<RutaProtegida rolesPermitidos={["psicologo"]}><Expedientes /></RutaProtegida>}
       />
-
-      {/* Perfil del psicólogo logueado */}
-      <Route
-        path="/psicologo/perfil"
-        element={
-          <RutaProtegida rolesPermitidos={["psicologo"]}>
-            <PerfilPsicologo />
-          </RutaProtegida>
-        }
+      <Route path="/psicologo/perfil"
+        element={<RutaProtegida rolesPermitidos={["psicologo"]}><PerfilPsicologo /></RutaProtegida>}
       />
-
-      {/* Detalle de una tarea específica de un paciente — vista del psicólogo */}
-      <Route
-        path="/psicologo/pacientes/:pacienteId/tareas/:tareaId"
-        element={
-          <RutaProtegida rolesPermitidos={["psicologo"]}>
-            <DetalleTarea />
-          </RutaProtegida>
-        }
+      <Route path="/psicologo/pacientes/:pacienteId/tareas/:tareaId"
+        element={<RutaProtegida rolesPermitidos={["psicologo"]}><DetalleTarea /></RutaProtegida>}
       />
 
       {/* ===== RUTAS DE LA SECRETARIA ===== */}
-      {/* Por construir — placeholder por ahora */}
-      <Route
-        path="/secretaria/dashboard"
-        element={
-          <RutaProtegida rolesPermitidos={["secretaria"]}>
-            <div className="p-8 text-dark font-medium">Dashboard Secretaria (próximamente)</div>
-          </RutaProtegida>
-        }
+      <Route path="/secretaria/dashboard"
+        element={<RutaProtegida rolesPermitidos={["secretaria"]}><DashboardSecretaria /></RutaProtegida>}
+      />
+      <Route path="/secretaria/pacientes"
+        element={<RutaProtegida rolesPermitidos={["secretaria"]}><PacientesSecretaria /></RutaProtegida>}
+      />
+      <Route path="/secretaria/calendario"
+        element={<RutaProtegida rolesPermitidos={["secretaria"]}><CalendarioSecretaria /></RutaProtegida>}
       />
 
       {/* ===== RUTAS DEL PACIENTE ===== */}
-
-      {/* Dashboard principal del paciente */}
-      <Route
-        path="/paciente/dashboard"
-        element={
-          <RutaProtegida rolesPermitidos={["paciente"]}>
-            <DashboardPaciente />
-          </RutaProtegida>
-        }
+      <Route path="/paciente/dashboard"
+        element={<RutaProtegida rolesPermitidos={["paciente"]}><DashboardPaciente /></RutaProtegida>}
+      />
+      <Route path="/paciente/citas/:citaId"
+        element={<RutaProtegida rolesPermitidos={["paciente"]}><DetalleCita /></RutaProtegida>}
+      />
+      <Route path="/paciente/tareas/:tareaId"
+        element={<RutaProtegida rolesPermitidos={["paciente"]}><DetalleTareaPaciente /></RutaProtegida>}
+      />
+      <Route path="/paciente/perfil"
+        element={<RutaProtegida rolesPermitidos={["paciente"]}><PerfilPacientePage /></RutaProtegida>}
+      />
+      <Route path="/paciente/calendario"
+        element={<RutaProtegida rolesPermitidos={["paciente"]}><CalendarioPaciente /></RutaProtegida>}
       />
 
-      {/* Detalle de una cita específica — vista del paciente
-          Permite ver feedback, cancelar y reagendar */}
-      <Route
-        path="/paciente/citas/:citaId"
-        element={
-          <RutaProtegida rolesPermitidos={["paciente"]}>
-            <DetalleCita />
-          </RutaProtegida>
-        }
-      />
-
-      {/* Detalle de una tarea específica — vista del paciente
-          Permite ver instrucciones, entregar con texto y archivo adjunto */}
-      <Route
-        path="/paciente/tareas/:tareaId"
-        element={
-          <RutaProtegida rolesPermitidos={["paciente"]}>
-            <DetalleTareaPaciente />
-          </RutaProtegida>
-        }
-      />
-
-      <Route
-  path="/paciente/perfil"
-  element={
-    <RutaProtegida rolesPermitidos={["paciente"]}>
-      <PerfilPacientePage />
-    </RutaProtegida>
-  }
-/>
-
-
-
-<Route
-  path="/paciente/calendario"
-  element={
-    <RutaProtegida rolesPermitidos={["paciente"]}>
-      <CalendarioPaciente />
-    </RutaProtegida>
-  }
-/>
-
-      {/* Cualquier URL que no exista → Landing */}
       <Route path="*" element={<Navigate to="/" replace />} />
 
     </Routes>
