@@ -228,6 +228,11 @@ export async function guardarFeedbackCita(id: number, feedback: string) {
   return response.data
 }
 
+export async function guardarFeedback(citaId: number, feedback: string) {
+  const response = await api.put<ApiResponse<null>>(`/citas/${citaId}/feedback`, { feedback })
+  return response.data
+}
+
 
 // ===========================
 // TAREAS
@@ -396,4 +401,3 @@ export async function getCitasHoy() {
   }[]>>("/citas/hoy")
   return response.data
 }
-

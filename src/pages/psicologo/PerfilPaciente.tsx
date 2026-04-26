@@ -7,7 +7,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
 import type { Paciente, Cita, Tarea, EstadoCita } from "../../types"
 import ModalNuevaTarea, { type DatosTarea } from "../../components/ui/ModalNuevaTarea"
-import { getPaciente, getCitasPorPaciente, cancelarCita, confirmarCita } from "../../services/api"
+import { getPaciente, getCitasPorPaciente, cancelarCita, confirmarCita,guardarFeedback } from "../../services/api"
 
 function calcularEdad(fechaNacimiento: string) {
   const hoy = new Date()
@@ -146,21 +146,25 @@ const [loadingConfirmar, setLoadingConfirmar] = useState(false)
     setExitoFeedback(false)
   }
 
-  async function handleGuardarFeedback() {
-    if (!textoFeedback.trim() || !citaSeleccionada) return
-    setLoadingFeedback(true)
-    try {
-      await new Promise(resolve => setTimeout(resolve, 800))
+async function handleGuardarFeedback() {
+  if (!textoFeedback.trim() || !citaSeleccionada) return
+  setLoadingFeedback(true)
+  try {
+    const res = await guardarFeedback(citaSeleccionada.id, textoFeedback)
+    if (res.success) {
       setCitas(prev => prev.map(c =>
         c.id === citaSeleccionada.id ? { ...c, feedback: textoFeedback } : c
       ))
       setExitoFeedback(true)
-    } catch {
-      alert("Error al guardar. Intenta de nuevo.")
-    } finally {
-      setLoadingFeedback(false)
+    } else {
+      alert(res.message ?? "Error al guardar")
     }
+  } catch {
+    alert("Error de conexión")
+  } finally {
+    setLoadingFeedback(false)
   }
+}
 
   if (cargando) {
     return (

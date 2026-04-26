@@ -176,5 +176,39 @@ if ($method === 'PUT' && isset($partes[0]) && is_numeric($partes[0]) && isset($p
     exit();
 }
 
+// ===========================
+// PUT /citas/:id/feedback
+// ===========================
+if ($method === 'PUT' && isset($partes[0]) && is_numeric($partes[0]) && isset($partes[1]) && $partes[1] === 'feedback') {
+
+    $citaId = (int)$partes[0];
+    $body   = json_decode(file_get_contents("php://input"), true);
+    $feedback = trim($body['feedback'] ?? '');
+
+    if (!$feedback) {
+        http_response_code(400);
+        echo json_encode(["success" => false, "message" => "El feedback no puede estar vacío"]);
+        exit();
+    }
+
+    $conn = conectarDB();
+    $stmt = $conn->prepare("UPDATE appointment SET feedback = ? WHERE appointment_id = ?");
+    $stmt->bind_param("si", $feedback, $citaId);
+    $stmt->execute();
+
+    if ($stmt->affected_rows === 0) {
+        http_response_code(404);
+        echo json_encode(["success" => false, "message" => "Cita no encontrada"]);
+        exit();
+    }
+
+    http_response_code(200);
+    echo json_encode(["success" => true, "message" => "Retroalimentación guardada"]);
+
+    $stmt->close();
+    $conn->close();
+    exit();
+}
+
 http_response_code(405);
 echo json_encode(["success" => false, "message" => "Metodo no permitido"]);

@@ -1,321 +1,282 @@
-// ===========================
-// src/pages/psicologo/Expedientes.tsx
-// ===========================
-// Pantalla donde el psicólogo ve y llena el expediente
-// clínico de un paciente específico.
-//
-// Recibe el pacienteId desde la URL:
-//   /psicologo/expedientes/1 → expediente del paciente 1
-//
-// Estructura de BD que usa:
-//   - medical_record: datos clínicos del paciente
-//   - medical_record_diagnosis: diagnósticos asociados
-//   - diagnosis: catálogo de diagnósticos
-//   - session_note: notas por sesión (una por cita)
-// ===========================
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
-import type { NotaSesion } from "../../types"
+import type { Paciente, ExpedienteClinico, Diagnostico } from "../../types"
+import { getPaciente, getExpediente, actualizarExpediente } from "../../services/api"
 
-interface Diagnostico {
-  id: number
-  nombre: string
-}
+type CampoTexto = keyof Pick<
+  ExpedienteClinico,
+  "motivoConsulta" | "condicionActual" | "infanciaAdolescencia" | "eventosSignificativos" | "historialAbuso" | "metasTerapeuticas"
+>
 
-interface Expediente {
-  id: number
-  pacienteNombre: string
-  pacienteApellido: string
-  motivoConsulta: string
-  condicionActual: string
-  infanciaAdolescencia: string
-  eventosSignificativos: string
-  historialAbuso: string
-  metasTerapeuticas: string
-  diagnosticos: Diagnostico[]
-}
+type FormData = Record<CampoTexto, string>
 
-const DIAGNOSTICOS_DISPONIBLES: Diagnostico[] = [
-  { id: 1, nombre: "Ansiedad generalizada" },
-  { id: 2, nombre: "Trastorno de depresión mayor" },
-  { id: 3, nombre: "Trastorno de Conducta Alimentaria (TCA)" },
-  { id: 4, nombre: "Trastorno Obsesivo Compulsivo (TOC)" },
-  { id: 5, nombre: "Trastorno de Estrés Postraumático (TEPT)" },
-  { id: 6, nombre: "Trastorno bipolar" },
-  { id: 7, nombre: "Fobia específica" },
-  { id: 8, nombre: "Trastorno de pánico" },
-  { id: 9, nombre: "Trastorno de ansiedad social" },
-  { id: 10, nombre: "Trastorno límite de la personalidad (TLP)" },
-  { id: 11, nombre: "TDAH" },
-  { id: 12, nombre: "Otro" },
+const CAMPOS: { key: CampoTexto; label: string }[] = [
+  { key: "motivoConsulta",        label: "Motivo de consulta" },
+  { key: "condicionActual",       label: "Condición actual" },
+  { key: "infanciaAdolescencia",  label: "Infancia y adolescencia" },
+  { key: "eventosSignificativos", label: "Eventos significativos" },
+  { key: "historialAbuso",        label: "Historial de abuso" },
+  { key: "metasTerapeuticas",     label: "Metas terapéuticas" },
 ]
 
-// Notas de sesión de ejemplo — vendrán de getNotasSesion(pacienteId)
-const NOTAS_EJEMPLO: NotaSesion[] = [
-  {
-    id: 1,
-    citaId: 1,
-    profesionalId: 1,
-    contenido: "Paciente llegó puntual. Se trabajaron técnicas de respiración diafragmática. Reporta dificultad para dormir los últimos días. Se asignó tarea de diario de emociones.",
-    fechaCita: "2026-03-13",
-    horaCita: "09:00",
-  },
-]
+function formDesde(exp: ExpedienteClinico): FormData {
+  return {
+    motivoConsulta:        exp.motivoConsulta        ?? "",
+    condicionActual:       exp.condicionActual        ?? "",
+    infanciaAdolescencia:  exp.infanciaAdolescencia   ?? "",
+    eventosSignificativos: exp.eventosSignificativos  ?? "",
+    historialAbuso:        exp.historialAbuso         ?? "",
+    metasTerapeuticas:     exp.metasTerapeuticas      ?? "",
+  }
+}
 
 export default function Expedientes() {
   const { pacienteId } = useParams()
   const navigate = useNavigate()
 
-  const [expediente, setExpediente] = useState<Expediente>({
-    id: 1,
-    pacienteNombre: "Juan",
-    pacienteApellido: "Pérez",
-    motivoConsulta: "Episodios de ansiedad recurrentes, dificultad para dormir y concentrarse en el trabajo.",
-    condicionActual: "Paciente presenta ansiedad moderada, refiere mejoría parcial con técnicas de respiración.",
-    infanciaAdolescencia: "Crianza estable, sin eventos traumáticos reportados. Buen rendimiento escolar.",
-    eventosSignificativos: "Pérdida de empleo hace 8 meses, inicio de síntomas coincide con este evento.",
-    historialAbuso: "Niega historial de abuso físico, emocional o sexual.",
-    metasTerapeuticas: "Desarrollar técnicas de manejo de ansiedad. Mejorar calidad de sueño. Retomar actividades sociales.",
-    diagnosticos: [
-      { id: 1, nombre: "Ansiedad generalizada" },
-    ],
+  const [paciente, setPaciente]              = useState<Paciente | null>(null)
+  const [expediente, setExpediente]          = useState<ExpedienteClinico | null>(null)
+  const [cargando, setCargando]              = useState(true)
+  const [error, setError]                    = useState("")
+  const [editando, setEditando]              = useState(false)
+  const [guardando, setGuardando]            = useState(false)
+  const [exito, setExito]                    = useState(false)
+  const [form, setForm]                      = useState<FormData>({
+    motivoConsulta: "", condicionActual: "", infanciaAdolescencia: "",
+    eventosSignificativos: "", historialAbuso: "", metasTerapeuticas: "",
   })
+  const [catalogo, setCatalogo]              = useState<Diagnostico[]>([])
+  const [selectedDx, setSelectedDx]          = useState<Set<number>>(new Set())
 
-  // Lista de notas de sesión del paciente
-  const [notas, setNotas] = useState<NotaSesion[]>(NOTAS_EJEMPLO)
+  useEffect(() => {
+    if (!pacienteId) return
+    cargar()
+  }, [pacienteId])
 
-  // Controla qué sección del expediente está expandida
-  const [seccionActiva, setSeccionActiva] = useState<string>("motivo")
+  async function cargar() {
+    try {
+      setCargando(true)
+      setError("")
+      const [resPac, resExp] = await Promise.all([
+        getPaciente(Number(pacienteId)),
+        getExpediente(Number(pacienteId)),
+      ])
 
-  // Controla si el formulario de nueva nota está visible
-  const [agregandoNota, setAgregandoNota] = useState(false)
+      if (resPac.success) setPaciente(resPac.data)
 
-  // Texto de la nueva nota que se está escribiendo
-  const [nuevaNota, setNuevaNota] = useState("")
-
-  function toggleDiagnostico(diag: Diagnostico) {
-    const yaSeleccionado = expediente.diagnosticos.find(d => d.id === diag.id)
-    if (yaSeleccionado) {
-      setExpediente(prev => ({
-        ...prev,
-        diagnosticos: prev.diagnosticos.filter(d => d.id !== diag.id)
-      }))
-    } else {
-      setExpediente(prev => ({
-        ...prev,
-        diagnosticos: [...prev.diagnosticos, diag]
-      }))
+      if (resExp.success) {
+        const exp = resExp.data
+        setExpediente(exp)
+        setForm(formDesde(exp))
+        if (exp.diagnosticosDisponibles) setCatalogo(exp.diagnosticosDisponibles)
+        if (exp.diagnosticos) setSelectedDx(new Set(exp.diagnosticos.map(d => d.id)))
+      } else {
+        setError(resExp.message ?? "No se pudo cargar el expediente")
+      }
+    } catch {
+      setError("Error de conexión con el servidor")
+    } finally {
+      setCargando(false)
     }
   }
 
-  function actualizarCampo(campo: keyof Expediente, valor: string) {
-    setExpediente(prev => ({ ...prev, [campo]: valor }))
+  function toggleDx(id: number) {
+    setSelectedDx(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
   }
 
-  // Guarda la nueva nota de sesión
-  // Cuando PHP esté listo, aquí irá crearNotaSesion(datos)
-  function handleGuardarNota() {
-    if (!nuevaNota.trim()) return
-
-    const nota: NotaSesion = {
-      id: notas.length + 1,
-      citaId: 0,       // cuando PHP esté listo vendrá de la cita actual
-      profesionalId: 1,
-      contenido: nuevaNota,
-      fechaCita: new Date().toISOString().split("T")[0], // fecha de hoy
-      horaCita: new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
+  async function handleGuardar() {
+    if (!expediente) return
+    console.log("expediente.id:", expediente.id)
+    setGuardando(true)
+    setExito(false)
+    try {
+      const res = await actualizarExpediente(expediente.id, {
+        ...form,
+        diagnosticosIds: Array.from(selectedDx),
+      })
+      if (res.success) {
+        setExpediente(prev => prev ? { ...prev, ...form } : prev)
+        setExito(true)
+        setEditando(false)
+        setTimeout(() => setExito(false), 3000)
+      } else {
+        alert(res.message ?? "Error al guardar")
+      }
+    } catch {
+      alert("Error de conexión al guardar")
+    } finally {
+      setGuardando(false)
     }
-
-    // Agrega la nota al inicio de la lista — más reciente primero
-    setNotas(prev => [nota, ...prev])
-    setNuevaNota("")
-    setAgregandoNota(false)
   }
 
-  const secciones = [
-    { id: "motivo", titulo: "Motivo de consulta", campo: "motivoConsulta" as keyof Expediente },
-    { id: "condicion", titulo: "Condición actual", campo: "condicionActual" as keyof Expediente },
-    { id: "infancia", titulo: "Infancia y adolescencia", campo: "infanciaAdolescencia" as keyof Expediente },
-    { id: "eventos", titulo: "Eventos significativos", campo: "eventosSignificativos" as keyof Expediente },
-    { id: "abuso", titulo: "Historial de abuso", campo: "historialAbuso" as keyof Expediente },
-    { id: "metas", titulo: "Metas terapéuticas", campo: "metasTerapeuticas" as keyof Expediente },
-  ]
+  function handleCancelar() {
+    if (!expediente) return
+    setForm(formDesde(expediente))
+    if (expediente.diagnosticos) setSelectedDx(new Set(expediente.diagnosticos.map(d => d.id)))
+    setEditando(false)
+  }
+
+  if (cargando) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center py-32">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !expediente) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="text-center py-32">
+          <p className="text-red-500 font-medium">{error || "Expediente no encontrado"}</p>
+          <button
+            onClick={() => navigate(`/psicologo/pacientes/${pacienteId}`)}
+            className="mt-3 text-sm text-primary hover:underline"
+          >
+            Volver al perfil del paciente
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
-
       <Navbar />
 
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-5xl mx-auto p-6">
+
+        <button
+          onClick={() => navigate(`/psicologo/pacientes/${pacienteId}`)}
+          className="text-sm text-slate-400 hover:text-dark transition-colors mb-4 flex items-center gap-1"
+        >
+          ← Volver al perfil del paciente
+        </button>
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <button
-              onClick={() => navigate(`/psicologo/pacientes/${pacienteId}`)}
-              className="text-sm text-slate-400 hover:text-dark transition-colors mb-1 flex items-center gap-1"
-            >
-              ← Volver al perfil
-            </button>
-            <h1 className="text-2xl font-bold text-dark">Expediente Clínico</h1>
-            <p className="text-slate-500 text-sm mt-1">
-              {expediente.pacienteNombre} {expediente.pacienteApellido}
-            </p>
+        <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xl">
+                {paciente ? `${paciente.nombre[0]}${paciente.apellido[0]}` : "?"}
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-dark">Expediente clínico</h1>
+                {paciente && (
+                  <p className="text-slate-500 text-sm">
+                    {paciente.nombre} {paciente.apellido}
+                    {paciente.apellidoMaterno && ` ${paciente.apellidoMaterno}`}
+                  </p>
+                )}
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Creado el{" "}
+                  {new Date(expediente.fechaCreacion + "T12:00:00").toLocaleDateString("es-MX")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {exito && (
+                <span className="text-sm text-green-600 font-medium">Cambios guardados</span>
+              )}
+              {editando ? (
+                <>
+                  <button
+                    onClick={handleCancelar}
+                    className="border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleGuardar}
+                    disabled={guardando}
+                    className="bg-primary hover:bg-primary-hover disabled:opacity-50 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors"
+                  >
+                    {guardando ? "Guardando..." : "Guardar cambios"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setEditando(true)}
+                  className="bg-primary hover:bg-primary-hover text-white font-medium px-5 py-2.5 rounded-xl transition-colors text-sm"
+                >
+                  Editar expediente
+                </button>
+              )}
+            </div>
           </div>
-          <button
-            onClick={() => console.log("Guardar expediente:", expediente)}
-            className="bg-primary hover:bg-primary-hover text-white font-medium px-5 py-2.5 rounded-xl transition-colors"
-          >
-            Guardar cambios
-          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Columna izquierda — diagnósticos */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <h3 className="font-semibold text-dark mb-3">Diagnósticos</h3>
-              <p className="text-xs text-slate-400 mb-3">
-                Selecciona todos los que apliquen
+          <div>
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <h3 className="font-semibold text-dark mb-1">Diagnósticos</h3>
+              <p className="text-xs text-slate-400 mb-4">
+                {editando ? "Selecciona todos los que apliquen" : "Diagnósticos asignados"}
               </p>
-              <div className="flex flex-col gap-2">
-                {DIAGNOSTICOS_DISPONIBLES.map((diag) => {
-                  const seleccionado = expediente.diagnosticos.find(d => d.id === diag.id)
-                  return (
-                    <button
-                      key={diag.id}
-                      onClick={() => toggleDiagnostico(diag)}
-                      className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                        seleccionado
-                          ? "bg-primary text-white"
-                          : "bg-background text-dark hover:bg-slate-200"
+              {catalogo.length === 0 ? (
+                <p className="text-sm text-slate-400">Sin datos</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {catalogo.map(dx => (
+                    <label
+                      key={dx.id}
+                      className={`flex items-start gap-3 p-2 rounded-xl transition-colors ${
+                        editando ? "cursor-pointer hover:bg-background" : "cursor-default"
                       }`}
                     >
-                      {diag.nombre}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Columna derecha — secciones + historial */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-
-            {/* Secciones del expediente */}
-            {secciones.map((seccion) => (
-              <div key={seccion.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setSeccionActiva(
-                    seccionActiva === seccion.id ? "" : seccion.id
-                  )}
-                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors"
-                >
-                  <span className="font-semibold text-dark">{seccion.titulo}</span>
-                  <span className={`text-slate-400 transition-transform ${
-                    seccionActiva === seccion.id ? "rotate-180" : ""
-                  }`}>
-                    ▼
-                  </span>
-                </button>
-
-                {seccionActiva === seccion.id && (
-                  <div className="px-5 pb-4">
-                    <textarea
-                      value={expediente[seccion.campo] as string}
-                      onChange={(e) => actualizarCampo(seccion.campo, e.target.value)}
-                      placeholder={`Escribe aquí sobre ${seccion.titulo.toLowerCase()}...`}
-                      rows={5}
-                      className="w-full border border-slate-200 rounded-lg px-4 py-3 text-dark placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* ===========================
-                HISTORIAL DE SESIONES
-                Cada nota está vinculada a una cita específica.
-                Se ordenan de más reciente a más antigua.
-                =========================== */}
-            <div className="bg-white rounded-2xl shadow-sm p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-semibold text-dark">Notas de sesión</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {notas.length} sesiones registradas
-                  </p>
-                </div>
-                <button
-                  onClick={() => setAgregandoNota(!agregandoNota)}
-                  className="text-xs text-primary hover:text-primary-hover font-medium"
-                >
-                  {agregandoNota ? "Cancelar" : "+ Nueva nota"}
-                </button>
-              </div>
-
-              {/* Formulario de nueva nota */}
-              {agregandoNota && (
-                <div className="mb-4 p-4 bg-background rounded-xl border border-primary border-opacity-30">
-                  <p className="text-xs text-slate-400 mb-2">
-                    {/* Muestra la fecha de hoy como referencia */}
-                    Sesión del {new Date().toLocaleDateString("es-MX", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric"
-                    })}
-                  </p>
-                  <textarea
-                    value={nuevaNota}
-                    onChange={(e) => setNuevaNota(e.target.value)}
-                    placeholder="Escribe las observaciones de esta sesión..."
-                    rows={4}
-                    autoFocus
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3 text-dark placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm mb-3"
-                  />
-                  <button
-                    onClick={handleGuardarNota}
-                    className="w-full bg-primary hover:bg-primary-hover text-white text-sm font-medium py-2 rounded-lg transition-colors"
-                  >
-                    Guardar nota
-                  </button>
-                </div>
-              )}
-
-              {/* Lista de notas existentes */}
-              {notas.length === 0 ? (
-                <p className="text-sm text-slate-400">No hay notas de sesión registradas</p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {notas.map((nota) => (
-                    <div
-                      key={nota.id}
-                      className="border-l-4 border-primary pl-4 py-1"
-                    >
-                      {/* Fecha y hora de la cita */}
-                      <p className="text-xs font-medium text-primary mb-1">
-                        {new Date(nota.fechaCita).toLocaleDateString("es-MX", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric"
-                        })} · {nota.horaCita} hrs
-                      </p>
-                      {/* Contenido de la nota */}
-                      <p className="text-sm text-dark leading-relaxed">
-                        {nota.contenido}
-                      </p>
-                    </div>
+                      <input
+                        type="checkbox"
+                        checked={selectedDx.has(dx.id)}
+                        onChange={() => editando && toggleDx(dx.id)}
+                        disabled={!editando}
+                        className="mt-0.5 w-4 h-4 accent-primary flex-shrink-0"
+                      />
+                      <span className={`text-sm leading-snug ${
+                        selectedDx.has(dx.id) ? "text-dark font-medium" : "text-slate-500"
+                      }`}>
+                        {dx.nombre}
+                      </span>
+                    </label>
                   ))}
                 </div>
               )}
             </div>
-
           </div>
+
+          {/* Columna derecha — campos clínicos */}
+          <div className="lg:col-span-2 flex flex-col gap-5">
+            {CAMPOS.map(({ key, label }) => (
+              <div key={key} className="bg-white rounded-2xl shadow-sm p-5">
+                <h3 className="font-semibold text-dark mb-3">{label}</h3>
+                {editando ? (
+                  <textarea
+                    value={form[key]}
+                    onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+                    rows={4}
+                    placeholder={`Escribe sobre ${label.toLowerCase()}...`}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-dark placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
+                  />
+                ) : form[key] ? (
+                  <p className="text-sm text-dark whitespace-pre-wrap leading-relaxed">{form[key]}</p>
+                ) : (
+                  <p className="text-sm text-slate-400 italic">Sin información registrada</p>
+                )}
+              </div>
+            ))}
+          </div>
+
         </div>
       </div>
     </div>

@@ -39,6 +39,9 @@ switch ($modulo) {
     case 'profesional':
     require __DIR__ . '/routes/profesional.php';
     break;
+    case 'expediente':
+    require __DIR__ . '/routes/expediente.php';
+    break;
 
     default:
         http_response_code(404);
