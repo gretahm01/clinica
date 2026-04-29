@@ -1,97 +1,70 @@
 // ===========================
 // src/pages/psicologo/Paciente.tsx
 // ===========================
-// Pantalla donde el psicólogo ve y gestiona su lista de pacientes.
-// Rediseñada con el mismo layout del Dashboard:
-//   Navbar arriba + Sidebar izquierdo + contenido principal
-//
-// Conectada a PHP — usa getPacientes() y crearPaciente() reales.
-// ===========================
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
 import Sidebar from "../../components/layout/Sidebar"
 import type { Paciente } from "../../types"
-import { getPacientes, crearPaciente } from "../../services/api"
+// Importamos crearCita de la API
+import { getPacientes, crearPaciente, crearCita } from "../../services/api"
 import ModalNuevoPaciente from "../../components/ui/ModalNuevoPaciente"
 import type { DatosPaciente } from "../../components/ui/ModalNuevoPaciente"
+// Importamos el Modal de Citas
+import ModalNuevaCita, { type DatosCita } from "../../components/ui/ModalNuevaCita"
 
-// ===========================
-// TARJETA DE PACIENTE
-// Card clickeable que muestra info resumida del paciente.
-// Al picarla navega al perfil completo.
-// ===========================
-function TarjetaPaciente({
-  paciente,
-  onClick,
-}: {
-  paciente: Paciente
-  onClick: () => void
-}) {
+function TarjetaPaciente({ paciente, onClick }: { paciente: any, onClick: () => void }) {
+  const esNuevo = !paciente.citasRealizadas || paciente.citasRealizadas === 0;
+
   return (
-    <div
-      onClick={onClick}
-      className="bg-white rounded-2xl p-5 border border-slate-100 hover:border-primary hover:shadow-md transition-all cursor-pointer group"
-    >
-      <div className="flex items-center gap-3 mb-4">
-        {/* Avatar con iniciales */}
-        <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-          {paciente.nombre[0]}{paciente.apellido[0]}
+    <div onClick={onClick} className="bg-white rounded-2xl p-5 border border-slate-100 hover:border-primary hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between">
+      <div className="flex items-start gap-3">
+        <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0 uppercase">
+          {paciente.nombre?.[0] || ""}{paciente.apellido?.[0] || ""}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-dark truncate">
+          <p className="font-semibold text-dark truncate capitalize leading-tight">
             {paciente.nombre} {paciente.apellido}
             {paciente.apellidoMaterno && ` ${paciente.apellidoMaterno}`}
           </p>
-          <p className="text-xs text-slate-400 truncate">{paciente.email}</p>
+          <p className="text-xs text-slate-400 truncate mt-0.5">{paciente.email}</p>
         </div>
-        {/* Badge activo */}
-        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-emerald-50 text-emerald-600 border border-emerald-100 flex-shrink-0">
-          Activo
-        </span>
+        
+        {esNuevo ? (
+          <span className="text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100 flex-shrink-0">
+            Nuevo Paciente
+          </span>
+        ) : (
+          <span className="text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100 flex-shrink-0">
+            Activo
+          </span>
+        )}
       </div>
 
-      {/* Info rápida */}
-      <div className="flex items-center gap-4 text-xs text-slate-400">
-        <span className="flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-          </svg>
-          {paciente.telefono}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          {paciente.totalCitas ?? 0} citas
-        </span>
-      </div>
-
-      {/* Flecha hover */}
-      <div className="flex justify-end mt-3">
+      <div className="flex justify-end mt-4">
         <span className="text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-          Ver perfil →
+          Ver Perfil →
         </span>
       </div>
     </div>
   )
 }
 
-// ===========================
-// COMPONENTE PRINCIPAL
-// ===========================
 export default function Pacientes() {
   const navigate = useNavigate()
 
   const [pacientes, setPacientes]   = useState<Paciente[]>([])
   const [busqueda, setBusqueda]     = useState("")
-  const [modalAbierto, setModalAbierto] = useState(false)
+  
+  const [modalPacienteAbierto, setModalPacienteAbierto] = useState(false)
+  // NUEVO: Estado para el modal de citas
+  const [modalCitaAbierto, setModalCitaAbierto] = useState(false)
+  
   const [cargando, setCargando]     = useState(true)
   const [error, setError]           = useState("")
   const [guardando, setGuardando]   = useState(false)
 
-  // Carga la lista de pacientes al entrar
   useEffect(() => {
     cargarPacientes()
   }, [])
@@ -113,13 +86,13 @@ export default function Pacientes() {
     }
   }
 
-  async function handleGuardar(datos: DatosPaciente) {
+  async function handleGuardarPaciente(datos: DatosPaciente) {
     try {
       setGuardando(true)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const respuesta = await crearPaciente(datos as any)
       if (respuesta.success) {
-        setModalAbierto(false)
+        setModalPacienteAbierto(false)
         await cargarPacientes()
       } else {
         alert(respuesta.message ?? "Error al registrar el paciente")
@@ -131,38 +104,53 @@ export default function Pacientes() {
     }
   }
 
-  // Filtra por nombre, apellido o correo
+  // NUEVO: Función para guardar la cita desde esta pantalla
+  async function handleGuardarCita(datos: DatosCita) {
+    try {
+      const respuesta = await crearCita({
+        pacienteId: datos.pacienteId,
+        profesionalId: 0,
+        fecha: datos.fecha,
+        hora: datos.hora,
+        estado: "pendiente",
+        duracion: datos.duracion,
+      } as any)
+
+      if (respuesta.success) {
+        setModalCitaAbierto(false)
+        alert("Cita agendada correctamente. Podrás verla en tu Dashboard.")
+      } else {
+        alert(respuesta.message ?? "Error al agendar la cita")
+      }
+    } catch {
+      alert("Error de conexión al agendar la cita")
+    }
+  }
+
   const pacientesFiltrados = pacientes.filter((p) => {
     const texto = busqueda.toLowerCase()
     return (
-      p.nombre.toLowerCase().includes(texto) ||
-      p.apellido.toLowerCase().includes(texto) ||
-      p.email.toLowerCase().includes(texto)
+      (p.nombre?.toLowerCase() || "").includes(texto) ||
+      (p.apellido?.toLowerCase() || "").includes(texto) ||
+      (p.email?.toLowerCase() || "").includes(texto)
     )
   })
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-
-      {/* Navbar sticky */}
       <Navbar />
 
-      {/* Layout: sidebar + contenido */}
       <div className="flex flex-1 overflow-hidden">
-
-        {/* Sidebar de navegación */}
         <Sidebar
           citasHoy={0}
           citasSemana={0}
           citasPendientes={0}
           proximasCitas={[]}
-          onNuevaCita={() => {}}
+          // AHORA SÍ CONECTAMOS EL BOTÓN
+          onNuevaCita={() => setModalCitaAbierto(true)}
         />
 
-        {/* Contenido principal */}
         <main className="flex-1 overflow-y-auto p-6">
-
-          {/* Header con título + buscador + botón */}
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-dark">Pacientes</h1>
@@ -171,7 +159,6 @@ export default function Pacientes() {
               </p>
             </div>
 
-            {/* Buscador + botón nuevo paciente */}
             <div className="flex items-center gap-3">
               <div className="relative">
                 <svg
@@ -190,22 +177,17 @@ export default function Pacientes() {
                 />
               </div>
               <button
-                onClick={() => setModalAbierto(true)}
+                onClick={() => setModalPacienteAbierto(true)}
                 className="bg-primary hover:bg-primary-hover text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
-                Nuevo paciente
+                Nuevo Paciente
               </button>
             </div>
           </div>
 
-          {/* ===========================
-              ESTADOS: cargando / error / vacío / lista
-              =========================== */}
-
-          {/* Cargando */}
           {cargando && (
             <div className="flex flex-col items-center justify-center py-24">
               <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
@@ -213,7 +195,6 @@ export default function Pacientes() {
             </div>
           )}
 
-          {/* Error de conexión */}
           {!cargando && error && (
             <div className="flex flex-col items-center justify-center py-24">
               <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -231,7 +212,6 @@ export default function Pacientes() {
             </div>
           )}
 
-          {/* Sin pacientes */}
           {!cargando && !error && pacientesFiltrados.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24">
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
@@ -251,7 +231,6 @@ export default function Pacientes() {
             </div>
           )}
 
-          {/* Grid de pacientes */}
           {!cargando && !error && pacientesFiltrados.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
               {pacientesFiltrados.map((paciente) => (
@@ -267,14 +246,23 @@ export default function Pacientes() {
         </main>
       </div>
 
-      {/* Modal nuevo paciente */}
+      {/* Modal de Nuevo Paciente */}
       <ModalNuevoPaciente
-        abierto={modalAbierto}
-        onCerrar={() => setModalAbierto(false)}
-        onGuardar={handleGuardar}
+        abierto={modalPacienteAbierto}
+        onCerrar={() => setModalPacienteAbierto(false)}
+        onGuardar={handleGuardarPaciente}
         guardando={guardando}
       />
 
+      {/* NUEVO: Modal de Nueva Cita */}
+      <ModalNuevaCita 
+        abierto={modalCitaAbierto} 
+        onCerrar={() => setModalCitaAbierto(false)} 
+        onGuardar={handleGuardarCita} 
+        pacientes={pacientes} 
+        fechaInicial="" 
+      />
+      
     </div>
   )
 }

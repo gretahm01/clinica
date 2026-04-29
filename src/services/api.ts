@@ -49,7 +49,7 @@ import type {
 // PRODUCCIÓN: Cuando suban el proyecto a un servidor real,
 // solo cambian la baseURL aquí y todo funciona.
 const api = axios.create({
-  baseURL: "http://localhost/MedTrack/clinica/backend",
+  baseURL: "http://localhost/clinica/backend",
   headers: {
     "Content-Type": "application/json", // le decimos a PHP que mandamos y esperamos JSON
   },
@@ -228,6 +228,14 @@ export async function guardarFeedbackCita(id: number, feedback: string) {
   return response.data
 }
 
+export async function guardarNotasCita(id: number, notes: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await api.put<ApiResponse<any>>(`/citas/${id}/notes`, { 
+    notes 
+  })
+  return response.data
+}
+
 
 // ===========================
 // TAREAS
@@ -393,7 +401,39 @@ export async function getCitasHoy() {
     estado: string
     nombre: string
     apellido: string
+    motivo?: string
   }[]>>("/citas/hoy")
   return response.data
 }
 
+//Agrege Funcion de Reagendar Cita,
+
+export async function reagendarCita(id: number, fecha: string, hora: string, motivo: string) {
+  const response = await api.put<ApiResponse<Cita>>(`/citas/${id}/reagendar`, {
+    fecha,
+    hora,
+    motivo // <--- LO ENVIAMOS A PHP
+  })
+  return response.data
+}
+
+export async function guardarContactoEmergencia(pacienteId: number, datos: {nombre: string, telefono: string, parentesco: string}) {
+  const response = await api.post<ApiResponse<any>>(`/pacientes/${pacienteId}/contacto-emergencia`, datos);
+  return response.data;
+}
+
+export const completarCita = async (id: number) => {
+  const res = await api.put(`/citas/${id}/completar`);
+  return res.data;
+};
+
+// --- NOTIFICACIONES ---
+export const getNotificaciones = async () => {
+  const res = await api.get('/notificaciones');
+  return res.data;
+};
+
+export const marcarNotificacionesLeidas = async () => {
+  const res = await api.put('/notificaciones');
+  return res.data;
+};

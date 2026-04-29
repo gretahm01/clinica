@@ -6,6 +6,7 @@ $ruta   = substr($url, strpos($url, 'backend') + strlen('backend'));
 $ruta   = trim($ruta, '/');
 $partes = explode('/', $ruta);
 
+$method = $_SERVER['REQUEST_METHOD']; // <--- DEFINE ESTO AQUÍ PARA TODOS
 $modulo = $partes[0] ?? '';
 $accion = $partes[1] ?? '';
 
@@ -36,9 +37,18 @@ switch ($modulo) {
     case 'citas':
     require __DIR__ . '/routes/citas.php';
     break;
+
     case 'profesional':
     require __DIR__ . '/routes/profesional.php';
     break;
+
+    case 'notificaciones':
+        require __DIR__ . '/routes/notificaciones.php';
+        break;
+
+    case 'expediente':
+        require __DIR__ . '/routes/expediente.php';
+        break;
 
     default:
         http_response_code(404);

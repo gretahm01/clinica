@@ -112,7 +112,7 @@ export interface ContactoEmergencia {
 //   "completada"  → la cita ya ocurrió y terminó (campo nuevo en BD actualizada)
 //
 // Se usa en: Dashboard.tsx (calendario), PerfilPaciente.tsx (historial de citas)
-export type EstadoCita = "pendiente" | "confirmada" | "cancelada" | "completada"
+export type EstadoCita = "pendiente" | "confirmada" | "cancelada" | "completada" | "reagendada"
 
 export interface Cita {
   id: number            // appointment.appointment_id
@@ -122,6 +122,7 @@ export interface Cita {
   hora: string          // appointment.appointment_time → "10:00"
   estado: EstadoCita    // appointment.status
   feedback?: string     // appointment.feedback — comentario del psicólogo (opcional)
+  motivo?: string //
 }
 
 

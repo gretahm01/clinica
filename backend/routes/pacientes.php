@@ -1,241 +1,198 @@
 <?php
-require_once __DIR__ . '/../config/headers.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../middleware/auth.php';
 
 $usuario = verificarToken();
-verificarRol($usuario, ['psicologo', 'secretaria']);
-
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Extraer el ID del paciente de la URL si existe
+// Re-calculamos las partes de la ruta
 $url    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$ruta   = substr($url, strpos($url, 'backend') + strlen('backend'));
-$ruta   = trim($ruta, '/');
-$partes = explode('/', $ruta);
-$pacienteId = isset($partes[1]) && is_numeric($partes[1]) ? (int)$partes[1] : null;
+$pos    = strpos($url, 'pacientes');
+$rutaRelativa = substr($url, $pos + strlen('pacientes'));
+$rutaRelativa = trim($rutaRelativa, '/');
+$partes = explode('/', $rutaRelativa);
 
-// ===========================
-// GET /pacientes — lista
-// ===========================
-if ($method === 'GET' && $pacienteId === null) {
+$pacienteId = (isset($partes[0]) && is_numeric($partes[0])) ? (int)$partes[0] : 0;
+$subAccion  = $partes[1] ?? '';
 
-    $conn = conectarDB();
+$conn = conectarDB();
 
-    $stmtProf = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
-    $stmtProf->bind_param("i", $usuario['userId']);
-    $stmtProf->execute();
-    $resultProf = $stmtProf->get_result();
-
-    if ($resultProf->num_rows === 0) {
-        http_response_code(404);
-        echo json_encode(["success" => false, "message" => "Profesional no encontrado"]);
+// ============================================================
+// CASO A: CONTACTO DE EMERGENCIA
+// ============================================================
+if ($pacienteId > 0 && $subAccion === 'contacto-emergencia') {
+    if ($method === 'GET') {
+        $sql = "SELECT full_name AS nombre, phone AS telefono, relationship AS parentesco 
+                FROM emergency_contact WHERE patient_id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $pacienteId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $data = $res->fetch_assoc();
+        echo json_encode(["success" => true, "data" => $data]);
         exit();
     }
 
-    $professional_id = $resultProf->fetch_assoc()['professional_id'];
-
-    $sql = "
-        SELECT 
-            p.patient_id        AS id,
-            p.user_id           AS userId,
-            u.first_name        AS nombre,
-            u.last_name         AS apellido,
-            u.middle_name       AS apellidoMaterno,
-            u.email             AS email,
-            u.phone             AS telefono,
-            u.birth_date        AS fechaNacimiento,
-            p.registration_date AS fechaRegistro,
-            COUNT(CASE WHEN a.status != 'cancelada' THEN 1 END) AS totalCitas
-        FROM patient p
-        JOIN user u ON p.user_id = u.user_id
-        LEFT JOIN appointment a ON a.patient_id = p.patient_id
-        WHERE p.professional_id = ?
-        GROUP BY p.patient_id
-        ORDER BY u.first_name ASC
-    ";
-
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $professional_id);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
-
-    $pacientes = [];
-    while ($fila = $resultado->fetch_assoc()) {
-        $pacientes[] = $fila;
+    if ($method === 'POST' || $method === 'PUT') {
+        $body = json_decode(file_get_contents("php://input"), true);
+        
+        $check = $conn->query("SELECT emergency_contact_id FROM emergency_contact WHERE patient_id = $pacienteId");
+        
+        if ($check->num_rows > 0) {
+            $stmt = $conn->prepare("UPDATE emergency_contact SET full_name = ?, phone = ?, relationship = ? WHERE patient_id = ?");
+            $stmt->bind_param("sssi", $body['nombre'], $body['telefono'], $body['parentesco'], $pacienteId);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO emergency_contact (patient_id, full_name, phone, relationship) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("isss", $pacienteId, $body['nombre'], $body['telefono'], $body['parentesco']);
+        }
+        
+        if ($stmt->execute()) {
+            echo json_encode(["success" => true, "message" => "Contacto actualizado"]);
+        } else {
+            echo json_encode(["success" => false, "message" => "Error al guardar"]);
+        }
+        exit();
     }
-
-    http_response_code(200);
-    echo json_encode(["success" => true, "data" => $pacientes]);
-
-    $stmtProf->close();
-    $stmt->close();
-    $conn->close();
-    exit();
 }
 
-// ===========================
-// GET /pacientes/:id — perfil específico
-// ===========================
-if ($method === 'GET' && $pacienteId !== null) {
-
-    $conn = conectarDB();
-
-    $sql = "
-        SELECT 
-            p.patient_id        AS id,
-            p.user_id           AS userId,
-            u.first_name        AS nombre,
-            u.last_name         AS apellido,
-            u.middle_name       AS apellidoMaterno,
-            u.email             AS email,
-            u.phone             AS telefono,
-            u.birth_date        AS fechaNacimiento,
-            p.registration_date AS fechaRegistro,
-            COUNT(a.appointment_id) AS totalCitas
-        FROM patient p
-        JOIN user u ON p.user_id = u.user_id
-        LEFT JOIN appointment a ON a.patient_id = p.patient_id
-        WHERE p.patient_id = ?
-        GROUP BY p.patient_id
-    ";
-
+// ============================================================
+// CASO B: DATOS DE UN PACIENTE ESPECÍFICO (GET /pacientes/:id)
+// ============================================================
+if ($method === 'GET' && $pacienteId > 0 && empty($subAccion)) {
+    $sql = "SELECT p.patient_id AS id, u.first_name AS nombre, u.last_name AS apellido, 
+                   u.middle_name AS apellidoMaterno, u.email, u.phone AS telefono, 
+                   u.birth_date AS fechaNacimiento, p.registration_date AS fechaRegistro,
+                   (SELECT COUNT(*) FROM appointment WHERE patient_id = p.patient_id AND status = 'completada') AS citasAtendidas
+            FROM patient p
+            JOIN user u ON p.user_id = u.user_id
+            WHERE p.patient_id = ?";
+            
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $pacienteId);
     $stmt->execute();
-    $resultado = $stmt->get_result();
-
-    if ($resultado->num_rows === 0) {
-        http_response_code(404);
+    $data = $stmt->get_result()->fetch_assoc();
+    
+    if ($data) {
+        echo json_encode(["success" => true, "data" => $data]);
+    } else {
         echo json_encode(["success" => false, "message" => "Paciente no encontrado"]);
-        exit();
     }
-
-    $paciente = $resultado->fetch_assoc();
-
-    http_response_code(200);
-    echo json_encode(["success" => true, "data" => $paciente]);
-
-    $stmt->close();
-    $conn->close();
     exit();
 }
 
-// ===========================
-// POST /pacientes — registrar nuevo
-// ===========================
-if ($method === 'POST') {
-
-    $body = json_decode(file_get_contents("php://input"), true);
-
-    $nombre          = trim($body['nombre']         ?? '');
-    $apellido        = trim($body['apellido']        ?? '');
-    $segundoApellido = trim($body['segundoApellido'] ?? '');
-    $email           = trim($body['email']           ?? '');
-    $telefono        = trim($body['telefono']        ?? '');
-    $fechaNacimiento = trim($body['fechaNacimiento'] ?? '');
-
-    $contactoNombre     = trim($body['contactoNombre']     ?? '');
-    $contactoTelefono   = trim($body['contactoTelefono']   ?? '');
-    $contactoParentesco = trim($body['contactoParentesco'] ?? '');
-
-    if (!$nombre || !$apellido || !$email || !$telefono || !$fechaNacimiento) {
-        http_response_code(400);
-        echo json_encode(["success" => false, "message" => "Faltan campos requeridos"]);
-        exit();
-    }
-
-    $conn = conectarDB();
-
-    $stmtCheck = $conn->prepare("SELECT user_id FROM user WHERE email = ?");
-    $stmtCheck->bind_param("s", $email);
-    $stmtCheck->execute();
-    if ($stmtCheck->get_result()->num_rows > 0) {
-        http_response_code(409);
-        echo json_encode(["success" => false, "message" => "Ya existe un usuario con ese correo"]);
-        exit();
-    }
-    $stmtCheck->close();
-
+// ============================================================
+// CASO C: LISTADO GENERAL PARA TARJETAS (GET /pacientes)
+// ============================================================
+if ($method === 'GET' && $pacienteId === 0) {
+    
     $stmtProf = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
     $stmtProf->bind_param("i", $usuario['userId']);
     $stmtProf->execute();
-    $resultProf = $stmtProf->get_result();
-
-    if ($resultProf->num_rows === 0) {
-        http_response_code(404);
-        echo json_encode(["success" => false, "message" => "Profesional no encontrado"]);
+    $profResult = $stmtProf->get_result()->fetch_assoc();
+    
+    if (!$profResult) {
+        echo json_encode(["success" => true, "data" => []]);
         exit();
     }
-    $professional_id = $resultProf->fetch_assoc()['professional_id'];
-    $stmtProf->close();
+    
+    $profId = $profResult['professional_id'];
 
-    $passwordTemporal = bin2hex(random_bytes(4));
-    $passwordHash     = password_hash($passwordTemporal, PASSWORD_BCRYPT);
-    $username = strtolower(substr($nombre, 0, 1) . $apellido . rand(100, 999));
-    $username = preg_replace('/[^a-z0-9]/', '', $username);
-
-    $conn->begin_transaction();
-
-    try {
-        $stmtUser = $conn->prepare("
-            INSERT INTO user (first_name, last_name, middle_name, email, phone, birth_date)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-        $stmtUser->bind_param("ssssss", $nombre, $apellido, $segundoApellido, $email, $telefono, $fechaNacimiento);
-        $stmtUser->execute();
-        $newUserId = $conn->insert_id;
-        $stmtUser->close();
-
-        $stmtAccess = $conn->prepare("INSERT INTO user_access (user_id, role_id, username, password) VALUES (?, 3, ?, ?)");
-        $stmtAccess->bind_param("iss", $newUserId, $username, $passwordHash);
-        $stmtAccess->execute();
-        $stmtAccess->close();
-
-        $fechaHoy = date('Y-m-d');
-        $stmtPatient = $conn->prepare("INSERT INTO patient (user_id, professional_id, registration_date) VALUES (?, ?, ?)");
-        $stmtPatient->bind_param("iis", $newUserId, $professional_id, $fechaHoy);
-        $stmtPatient->execute();
-        $newPatientId = $conn->insert_id;
-        $stmtPatient->close();
-
-        if ($contactoNombre && $contactoTelefono) {
-            $stmtContacto = $conn->prepare("INSERT INTO emergency_contact (patient_id, full_name, phone, relationship) VALUES (?, ?, ?, ?)");
-            $stmtContacto->bind_param("isss", $newPatientId, $contactoNombre, $contactoTelefono, $contactoParentesco);
-            $stmtContacto->execute();
-            $stmtContacto->close();
-        }
-
-        $conn->commit();
-
-        http_response_code(201);
-        echo json_encode([
-            "success" => true,
-            "message" => "Paciente registrado correctamente",
-            "data" => [
-                "id"              => $newPatientId,
-                "userId"          => $newUserId,
-                "nombre"          => $nombre,
-                "apellido"        => $apellido,
-                "apellidoMaterno" => $segundoApellido,
-                "email"           => $email,
-                "telefono"        => $telefono,
-                "fechaNacimiento" => $fechaNacimiento,
-                "fechaRegistro"   => $fechaHoy,
-                "totalCitas"      => 0,
-                "credenciales"    => ["username" => $username, "password" => $passwordTemporal]
-            ]
-        ]);
-
-    } catch (Exception $e) {
-        $conn->rollback();
-        http_response_code(500);
-        echo json_encode(["success" => false, "message" => "Error al registrar el paciente"]);
-    }
-
-    $conn->close();
+    // CORRECCIÓN: Filtramos por el professional_id que guardamos al crear al paciente
+    // Y contamos las citas 'completada' para saber si es nuevo o no
+    $sql = "SELECT 
+                p.patient_id AS id, 
+                u.first_name AS nombre, 
+                u.last_name AS apellido, 
+                u.middle_name AS apellidoMaterno,
+                u.email AS email,
+                u.phone AS telefono,
+                (SELECT COUNT(*) FROM appointment WHERE patient_id = p.patient_id AND status = 'completada') AS citasRealizadas
+            FROM patient p 
+            JOIN user u ON p.user_id = u.user_id
+            WHERE p.professional_id = ?"; // <--- Esta es la clave para que aparezcan los nuevos
+            
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $profId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    
+    $lista = [];
+    while($row = $res->fetch_assoc()) $lista[] = $row;
+    echo json_encode(["success" => true, "data" => $lista]);
     exit();
 }
 
-http_response_code(405);
-echo json_encode(["success" => false, "message" => "Método no permitido"]);
+
+
+// ============================================================
+// CASO D: CREAR NUEVO PACIENTE (POST /pacientes)
+// ============================================================
+if ($method === 'POST') {
+    $body = json_decode(file_get_contents("php://input"), true);
+    
+    // Empezamos la transacción
+    $conn->begin_transaction();
+    
+    try {
+        // 1. Obtener ID del psicólogo que está creando al paciente (para la vinculación)
+        $stmtProf = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
+        $stmtProf->bind_param("i", $usuario['userId']);
+        $stmtProf->execute();
+        $resProf = $stmtProf->get_result()->fetch_assoc();
+        
+        if (!$resProf) {
+            throw new Exception("El usuario actual no es un profesional válido.");
+        }
+        $profesionalId = $resProf['professional_id'];
+
+        // 2. Datos de React
+        $nombre = $body['nombre'] ?? '';
+        $apellido = $body['apellido'] ?? '';
+        $segundoApellido = $body['segundoApellido'] ?? '';
+        $email = $body['email'] ?? '';
+        $telefono = $body['telefono'] ?? '';
+        $fechaNac = $body['fechaNacimiento'] ?? null;
+        
+        // 3. Insertar en tabla `user`
+        $stmtUser = $conn->prepare("INSERT INTO user (first_name, last_name, middle_name, email, phone, birth_date) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmtUser->bind_param("ssssss", $nombre, $apellido, $segundoApellido, $email, $telefono, $fechaNac);
+        $stmtUser->execute();
+        $nuevoUserId = $conn->insert_id; 
+        
+        // 4. Crear credenciales en `user_access`
+        // Generamos un username automático usando la primera parte de su correo + un número al azar
+        $partesEmail = explode('@', $email);
+        $usernameGenerado = $partesEmail[0] . rand(100, 999); 
+        $passwordPorDefecto = password_hash("password123", PASSWORD_BCRYPT);
+        
+        // Insertamos el role_id = 3 (paciente) y las columnas correctas
+        $stmtAccess = $conn->prepare("INSERT INTO user_access (user_id, role_id, username, password) VALUES (?, 3, ?, ?)");
+        $stmtAccess->bind_param("iss", $nuevoUserId, $usernameGenerado, $passwordPorDefecto);
+        $stmtAccess->execute();
+        
+        // 5. Insertar en tabla `patient` y VINCULAR al psicólogo automáticamente
+        $stmtPatient = $conn->prepare("INSERT INTO patient (user_id, registration_date, professional_id) VALUES (?, CURDATE(), ?)");
+        $stmtPatient->bind_param("ii", $nuevoUserId, $profesionalId);
+        $stmtPatient->execute();
+        $nuevoPatientId = $conn->insert_id;
+        
+        // 6. Opcional: Insertar contacto de emergencia si lo llenaron
+        if (!empty($body['contactoNombre'])) {
+            $stmtEmerg = $conn->prepare("INSERT INTO emergency_contact (patient_id, full_name, phone, relationship) VALUES (?, ?, ?, ?)");
+            $stmtEmerg->bind_param("isss", $nuevoPatientId, $body['contactoNombre'], $body['contactoTelefono'], $body['contactoParentesco']);
+            $stmtEmerg->execute();
+        }
+        
+        // ¡Si todo sale bien, aplicamos los cambios a la base de datos!
+        $conn->commit();
+        echo json_encode(["success" => true, "message" => "Paciente creado y vinculado con éxito"]);
+        
+    } catch (Exception $e) {
+        $conn->rollback();
+        http_response_code(500);
+        echo json_encode(["success" => false, "message" => "Error al crear paciente: " . $e->getMessage()]);
+    }
+    
+    exit();
+}
+$conn->close();

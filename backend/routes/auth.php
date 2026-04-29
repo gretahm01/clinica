@@ -1,91 +1,79 @@
 <?php
-require_once __DIR__ . '/../config/headers.php';
 require_once __DIR__ . '/../config/db.php';
-require_once __DIR__ . '/../middleware/auth.php';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(["success" => false, "message" => "Método no permitido"]);
+$method = $_SERVER['REQUEST_METHOD'];
+
+if ($method === 'POST') {
+    $body = json_decode(file_get_contents("php://input"), true);
+    $email = $body['email'] ?? '';
+    $password = $body['password'] ?? '';
+
+    $conn = conectarDB();
+
+    // 1. Buscamos al usuario por su email y obtenemos su rol
+    $sql = "SELECT u.user_id, u.first_name, u.last_name, ua.password, r.role_name, ua.role_id 
+            FROM user u 
+            JOIN user_access ua ON u.user_id = ua.user_id 
+            JOIN role r ON ua.role_id = r.role_id 
+            WHERE u.email = ?";
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows === 1) {
+        $user = $result->fetch_assoc();
+
+        // 2. Verificamos la contraseña (asumiendo que usas password_hash)
+        if (password_verify($password, $user['password'])) {
+            
+            $responseData = [
+                "userId" => $user['user_id'],
+                "nombre" => $user['first_name'],
+                "apellido" => $user['last_name'],
+                "rol" => $user['role_name'],
+                "token" => "JWT_SIMULADO_" . bin2hex(random_bytes(16)) // Aquí iría tu generación de JWT real
+            ];
+
+            // 3. TRUCO CLAVE: Si es paciente, buscamos su patient_id
+            if ($user['role_id'] == 3) { // 3 es el ID de rol para 'paciente'
+                $stmtPatient = $conn->prepare("SELECT patient_id FROM patient WHERE user_id = ?");
+                $stmtPatient->bind_param("i", $user['user_id']);
+                $stmtPatient->execute();
+                $resPatient = $stmtPatient->get_result();
+                
+                if ($rowP = $resPatient->fetch_assoc()) {
+                    $responseData["pacienteId"] = $rowP['patient_id'];
+                }
+                $stmtPatient->close();
+            }
+
+            // 4. Si es psicólogo, podrías buscar su professional_id de la misma forma
+            if ($user['role_id'] == 1) {
+                $stmtProf = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
+                $stmtProf->bind_param("i", $user['user_id']);
+                $stmtProf->execute();
+                $resProf = $stmtProf->get_result();
+                
+                if ($rowPr = $resProf->fetch_assoc()) {
+                    $responseData["profesionalId"] = $rowPr['professional_id'];
+                }
+                $stmtProf->close();
+            }
+
+            echo json_encode([
+                "success" => true,
+                "data" => $responseData
+            ]);
+        } else {
+            echo json_encode(["success" => false, "message" => "Contraseña incorrecta"]);
+        }
+    } else {
+        echo json_encode(["success" => false, "message" => "Usuario no encontrado"]);
+    }
+
+    $stmt->close();
+    $conn->close();
     exit();
 }
-
-$body     = json_decode(file_get_contents("php://input"), true);
-$email    = trim($body['email']    ?? '');
-$password = trim($body['password'] ?? '');
-
-if (!$email || !$password) {
-    http_response_code(400);
-    echo json_encode([
-        "success" => false,
-        "message" => "Email y contraseña son requeridos"
-    ]);
-    exit();
-}
-
-$conn = conectarDB();
-
-$sql = "
-    SELECT 
-        u.user_id,
-        u.first_name,
-        u.last_name,
-        u.email,
-        ua.password,
-        r.role_name
-    FROM user u
-    JOIN user_access ua ON u.user_id = ua.user_id
-    JOIN role r         ON ua.role_id = r.role_id
-    WHERE u.email = ?
-    LIMIT 1
-";
-
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("s", $email);
-$stmt->execute();
-$resultado = $stmt->get_result();
-
-if ($resultado->num_rows === 0) {
-    http_response_code(401);
-    echo json_encode([
-        "success" => false,
-        "message" => "Credenciales incorrectas"
-    ]);
-    exit();
-}
-
-$usuario = $resultado->fetch_assoc();
-
-if (!password_verify($password, $usuario['password'])) {
-    http_response_code(401);
-    echo json_encode([
-        "success" => false,
-        "message" => "Credenciales incorrectas"
-    ]);
-    exit();
-}
-
-$datosToken = [
-    "userId"   => $usuario['user_id'],
-    "email"    => $usuario['email'],
-    "rol"      => $usuario['role_name'],
-    "nombre"   => $usuario['first_name'],
-    "apellido" => $usuario['last_name'],
-];
-
-$token = crearToken($datosToken);
-
-http_response_code(200);
-echo json_encode([
-    "success" => true,
-    "data"    => [
-        "userId"   => $usuario['user_id'],
-        "nombre"   => $usuario['first_name'],
-        "apellido" => $usuario['last_name'],
-        "email"    => $usuario['email'],
-        "rol"      => $usuario['role_name'],
-        "token"    => $token
-    ]
-]);
-
-$stmt->close();
-$conn->close();

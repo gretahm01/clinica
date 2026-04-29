@@ -17,53 +17,64 @@
 //   - solicitarCita(datos) → para reagendar (crea nueva solicitud)
 // ===========================
 
-import { useState } from "react"
+//Parte que se va a reemplazar por la conexión a PHP, sugerida por gemini
+//import { useState } from "react"
+//import { useParams, useNavigate } from "react-router-dom"
+//import type { Cita, EstadoCita } from "../../types"
+//import NavbarPaciente from "../../components/layout/NavbarPaciente"
+
+import { useState, useEffect } from "react" // Agregamos useEffect
 import { useParams, useNavigate } from "react-router-dom"
+import { useAuth } from "../../hooks/useAuth" // Para saber quién está logueado
+import { getCitasPorPaciente, cancelarCita, confirmarCita, reagendarCita } from "../../services/api" // Conexión a PHP
 import type { Cita, EstadoCita } from "../../types"
 import NavbarPaciente from "../../components/layout/NavbarPaciente"
+
 
 // ===========================
 // DATOS MOCK
 // Reemplazar con getCita(citaId) cuando PHP esté listo
+
+//Pondre como comentario esto, porque ya tengo citas reales
 // ===========================
-const CITAS_MOCK: Cita[] = [
-  {
-    id: 1,
-    pacienteId: 1,
-    profesionalId: 1,
-    fecha: "2026-04-01",
-    hora: "10:00",
-    estado: "confirmada",
-    feedback: undefined,
-  },
-  {
-    id: 2,
-    pacienteId: 1,
-    profesionalId: 1,
-    fecha: "2026-03-20",
-    hora: "10:00",
-    estado: "completada",
-    feedback: "Buen progreso esta sesión. Continúa con los ejercicios de respiración diafragmática que practicamos. Para la próxima sesión trae el diario de emociones completo.",
-  },
-  {
-    id: 3,
-    pacienteId: 1,
-    profesionalId: 1,
-    fecha: "2026-03-13",
-    hora: "10:00",
-    estado: "completada",
-    feedback: undefined,
-  },
-  {
-    id: 4,
-    pacienteId: 1,
-    profesionalId: 1,
-    fecha: "2026-03-05",
-    hora: "09:00",
-    estado: "cancelada",
-    feedback: undefined,
-  },
-]
+//const CITAS_MOCK: Cita[] = [
+//  {
+//    id: 1,
+//    pacienteId: 1,
+//    profesionalId: 1,
+//    fecha: "2026-04-01",
+//    hora: "10:00",
+//    estado: "confirmada",
+//    feedback: undefined,
+//  },
+//  {
+//    id: 2,
+//    pacienteId: 1,
+//    profesionalId: 1,
+//    fecha: "2026-03-20",
+//    hora: "10:00",
+//    estado: "completada",
+//    feedback: "Buen progreso esta sesión. Continúa con los ejercicios de respiración diafragmática que practicamos. Para la próxima sesión trae el diario de emociones completo.",
+//  },
+//  {
+//    id: 3,
+//    pacienteId: 1,
+//    profesionalId: 1,
+//    fecha: "2026-03-13",
+//    hora: "10:00",
+//    estado: "completada",
+//    feedback: undefined,
+//  },
+//  {
+//    id: 4,
+//    pacienteId: 1,
+//    profesionalId: 1,
+//    fecha: "2026-03-05",
+//    hora: "09:00",
+//    estado: "cancelada",
+//    feedback: undefined,
+//  },
+//]
 
 // ===========================
 // HELPERS
@@ -103,37 +114,115 @@ function formatearFecha(fecha: string) {
 // COMPONENTE PRINCIPAL
 // ===========================
 export default function DetalleCita() {
-  const { citaId } = useParams()
+
+const { citaId } = useParams()
   const navigate   = useNavigate()
+  const { usuario } = useAuth() // Sacamos el usuario
 
-  // Busca la cita en el mock por su ID
-  // TODO: reemplazar con getCita(Number(citaId)) cuando PHP esté listo
-  const citaEncontrada = CITAS_MOCK.find(c => c.id === Number(citaId))
+  // 1. Estados reales
+  const [cita, setCita] = useState<Cita | null>(null)
+  const [cargando, setCargando] = useState(true) // Pantalla de carga
 
-  // Estado local de la cita — se actualiza cuando el paciente cancela
-  const [cita, setCita] = useState<Cita | null>(citaEncontrada ?? null)
-
-  // Controla si el modal de cancelar está abierto
+  // Estados de los modales
   const [modalCancelar, setModalCancelar] = useState(false)
-
-  // Controla si el modal de reagendar está abierto
   const [modalReagendar, setModalReagendar] = useState(false)
-
-  // Campos del formulario de reagendar
-  const [fechaNueva, setFechaNueva]               = useState("")
-  const [horaNueva, setHoraNueva]                 = useState("")
-  const [motivoReagendar, setMotivoReagendar]     = useState("")
-
-  // Estados de carga y confirmación
+  const [fechaNueva, setFechaNueva] = useState("")
+  const [horaNueva, setHoraNueva] = useState("")
+  const [motivoReagendar, setMotivoReagendar] = useState("")
+  
   const [loadingCancelar, setLoadingCancelar]   = useState(false)
   const [loadingReagendar, setLoadingReagendar] = useState(false)
+  const [loadingConfirmar, setLoadingConfirmar] = useState(false)
   const [reagendado, setReagendado]             = useState(false)
   const [errorReagendar, setErrorReagendar]     = useState("")
 
-  // Fecha mínima para reagendar = hoy
   const hoy = new Date().toISOString().split("T")[0]
 
-  // Si no se encontró la cita, muestra mensaje de error
+  // 2. Traer los datos de PHP al abrir la pantalla
+  useEffect(() => {
+    async function obtenerDetalle() {
+      if (!usuario) return;
+      try {
+        // Traemos todas las citas de este paciente
+        const respuesta = await getCitasPorPaciente(usuario.userId);
+        if (respuesta.success) {
+          // Buscamos específicamente la cita que coincida con el ID de la URL (ej. 22)
+          const citaEncontrada = respuesta.data.find(c => c.id === Number(citaId));
+          setCita(citaEncontrada || null);
+        }
+      } catch (error) {
+        console.error("Error al cargar la cita:", error);
+      } finally {
+        setCargando(false);
+      }
+    }
+    obtenerDetalle();
+  }, [usuario, citaId]);
+
+  // 3. Modificamos handleCancelar para que llame a PHP de verdad
+  async function handleCancelar() {
+    if (!cita) return;
+    setLoadingCancelar(true)
+    try {
+      await cancelarCita(cita.id); // Llama al endpoint PUT /citas/:id/cancelar
+      setCita(prev => prev ? { ...prev, estado: "cancelada" } : null)
+      setModalCancelar(false)
+    } catch {
+      alert("Error al cancelar la cita. Intenta de nuevo.")
+    } finally {
+      setLoadingCancelar(false)
+    }
+  }
+
+
+
+  // Agregamos función para confirmar la cita (cuando el paciente la confirma desde el dashboard)
+  async function handleConfirmar() {
+    if (!cita) return;
+    setLoadingConfirmar(true)
+    try {
+      await confirmarCita(cita.id); 
+      setCita(prev => prev ? { ...prev, estado: "confirmada" } : null)
+    } catch {
+      alert("Error al confirmar la cita. Intenta de nuevo.")
+    } finally {
+      setLoadingConfirmar(false)
+    }
+  }
+
+  // HandleReagendar lo dejamos como simulacro por ahora hasta crear esa tabla
+  async function handleReagendar() {
+    if (!fechaNueva) return setErrorReagendar("Selecciona una fecha")
+    if (!horaNueva)  return setErrorReagendar("Selecciona una hora")
+    
+    setLoadingReagendar(true)
+    try {
+      // 1. Mandamos los datos a PHP
+      await reagendarCita(cita!.id, fechaNueva, horaNueva, motivoReagendar); 
+      
+      // 2. Mostramos éxito
+      setReagendado(true)
+      
+      // 3. Actualizamos la pantalla para el paciente
+      setCita(prev => prev ? { ...prev, fecha: fechaNueva, hora: horaNueva, estado: "reagendada" } : null)
+    } catch {
+      setErrorReagendar("Error al enviar la solicitud. Intenta de nuevo.")
+    } finally {
+      setLoadingReagendar(false)
+    }
+  }
+
+  // 4. Pantalla de carga visual
+  if (cargando) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-4"></div>
+        <p className="text-slate-500 font-medium">Buscando detalles de tu cita...</p>
+      </div>
+    )
+  }
+
+  // Si después de cargar no se encontró la cita (ej. alguien escribió un ID falso en la URL)
   if (!cita) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -150,39 +239,88 @@ export default function DetalleCita() {
     )
   }
 
+  const puedeCancelarOReagendar = cita.estado === "confirmada" || cita.estado === "pendiente"
+
+//  const { citaId } = useParams()
+//  const navigate   = useNavigate()
+
+  // Busca la cita en el mock por su ID
+  // TODO: reemplazar con getCita(Number(citaId)) cuando PHP esté listo
+//  const citaEncontrada = CITAS_MOCK.find(c => c.id === Number(citaId))
+
+  // Estado local de la cita — se actualiza cuando el paciente cancela
+//  const [cita, setCita] = useState<Cita | null>(citaEncontrada ?? null)
+
+  // Controla si el modal de cancelar está abierto
+//  const [modalCancelar, setModalCancelar] = useState(false)
+
+  // Controla si el modal de reagendar está abierto
+//  const [modalReagendar, setModalReagendar] = useState(false)
+
+  // Campos del formulario de reagendar
+//  const [fechaNueva, setFechaNueva]               = useState("")
+//  const [horaNueva, setHoraNueva]                 = useState("")
+//  const [motivoReagendar, setMotivoReagendar]     = useState("")
+
+  // Estados de carga y confirmación
+//  const [loadingCancelar, setLoadingCancelar]   = useState(false)
+//  const [loadingReagendar, setLoadingReagendar] = useState(false)
+//  const [reagendado, setReagendado]             = useState(false)
+//  const [errorReagendar, setErrorReagendar]     = useState("")
+
+  // Fecha mínima para reagendar = hoy
+//  const hoy = new Date().toISOString().split("T")[0]
+
+  // Si no se encontró la cita, muestra mensaje de error
+//  if (!cita) {
+//    return (
+//      <div className="min-h-screen bg-background flex items-center justify-center">
+//        <div className="text-center">
+//          <p className="text-dark font-medium mb-2">Cita no encontrada</p>
+//          <button
+//            onClick={() => navigate("/paciente/dashboard")}
+//            className="text-sm text-primary hover:text-primary-hover"
+//          >
+//            Volver al dashboard
+//          </button>
+//        </div>
+//      </div>
+//    )
+//  }
+
   // El paciente solo puede cancelar o reagendar si la cita es confirmada o pendiente
-  const puedeCancelarOReagendar =
-    cita.estado === "confirmada" || cita.estado === "pendiente"
+//  const puedeCancelarOReagendar =
+//    cita.estado === "confirmada" || cita.estado === "pendiente"
 
   // Cancela la cita — TODO: llamar a cancelarCita(cita.id) cuando PHP esté listo
-  async function handleCancelar() {
-    setLoadingCancelar(true)
-    try {
-      await new Promise(resolve => setTimeout(resolve, 800))
-      setCita(prev => prev ? { ...prev, estado: "cancelada" } : null)
-      setModalCancelar(false)
-    } catch {
-      alert("Error al cancelar la cita. Intenta de nuevo.")
-    } finally {
-      setLoadingCancelar(false)
-    }
-  }
+//  async function handleCancelar() {
+//    setLoadingCancelar(true)
+//    try {
+//      await new Promise(resolve => setTimeout(resolve, 800))
+//      setCita(prev => prev ? { ...prev, estado: "cancelada" } : null)
+//      setModalCancelar(false)
+//    } catch {
+//      alert("Error al cancelar la cita. Intenta de nuevo.")
+//    } finally {
+//      setLoadingCancelar(false)
+//    }
+//  }
 
   // Envía solicitud de reagendar — TODO: llamar a solicitarCita() cuando PHP esté listo
-  async function handleReagendar() {
-    if (!fechaNueva) return setErrorReagendar("Selecciona una fecha")
-    if (!horaNueva)  return setErrorReagendar("Selecciona una hora")
+//  async function handleReagendar() {
+//    if (!fechaNueva) return setErrorReagendar("Selecciona una fecha")
+//    if (!horaNueva)  return setErrorReagendar("Selecciona una hora")
 
-    setLoadingReagendar(true)
-    try {
-      await new Promise(resolve => setTimeout(resolve, 800))
-      setReagendado(true)
-    } catch {
-      setErrorReagendar("Error al enviar la solicitud. Intenta de nuevo.")
-    } finally {
-      setLoadingReagendar(false)
-    }
-  }
+//    setLoadingReagendar(true)
+//    try {
+//      await new Promise(resolve => setTimeout(resolve, 800))
+//      setReagendado(true)
+//    } catch {
+//      setErrorReagendar("Error al enviar la solicitud. Intenta de nuevo.")
+//    } finally {
+//      setLoadingReagendar(false)
+//    }
+//  }
 
   return (
     <>
@@ -259,6 +397,28 @@ export default function DetalleCita() {
               <h3 className="font-semibold text-dark mb-4">Opciones</h3>
               <div className="flex flex-col gap-3">
 
+                {/* BOTÓN CONFIRMAR */}
+                {cita.estado === "pendiente" && (
+                  <button
+                    onClick={handleConfirmar}
+                    disabled={loadingConfirmar}
+                    className="w-full flex items-center gap-3 px-4 py-3 border border-emerald-100 rounded-xl hover:bg-emerald-50 transition-colors text-left"
+                  >
+                    <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-emerald-600">
+                        {loadingConfirmar ? "Confirmando..." : "Confirmar mi asistencia"}
+                      </p>
+                      <p className="text-xs text-slate-400">Asegura tu lugar para esta sesión</p>
+                    </div>
+                  </button>
+                )}
+
+                {/* BOTÓN REAGENDAR */}
                 <button
                   onClick={() => setModalReagendar(true)}
                   className="w-full flex items-center gap-3 px-4 py-3 border border-slate-200 rounded-xl hover:bg-background transition-colors text-left"
@@ -274,6 +434,7 @@ export default function DetalleCita() {
                   </div>
                 </button>
 
+                {/* BOTÓN CANCELAR */}
                 <button
                   onClick={() => setModalCancelar(true)}
                   className="w-full flex items-center gap-3 px-4 py-3 border border-red-100 rounded-xl hover:bg-red-50 transition-colors text-left"
