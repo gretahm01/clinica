@@ -30,6 +30,12 @@ import DashboardSecretaria  from "./pages/secretaria/DashboardSecretaria"
 import PacientesSecretaria  from "./pages/secretaria/PacienteSecretaria"
 import CalendarioSecretaria from "./pages/secretaria/CalendarioSecretaria"
 
+// ===== PÁGINAS DEL ADMIN =====
+import AdminDashboard     from "./pages/admin/AdminDashboard"
+import AdminPatientsPage  from "./pages/admin/AdminPatientsPage"
+import AdminStaffPage     from "./pages/admin/AdminStaffPage"
+import AdminSettingsPage from "./pages/admin/AdminSettingsPage"
+
 // ===========================
 // RUTA PROTEGIDA
 // ===========================
@@ -62,7 +68,7 @@ export default function App() {
     <Routes>
 
       {/* ===== PÁGINAS PÚBLICAS ===== */}
-      <Route path="/"         element={<Landing />} />
+      <Route path="/"        element={<Landing />} />
       <Route path="/registro" element={<Registro />} />
       <Route
         path="/login"
@@ -120,6 +126,22 @@ export default function App() {
       <Route path="/paciente/calendario"
         element={<RutaProtegida rolesPermitidos={["paciente"]}><CalendarioPaciente /></RutaProtegida>}
       />
+
+      {/* ===== RUTAS DEL ADMIN ===== */}
+      <Route path="/admin/dashboard"
+        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminDashboard /></RutaProtegida>}
+      />
+      <Route path="/admin/pacientes"
+        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminPatientsPage /></RutaProtegida>}
+      />
+      <Route path="/admin/staff"
+        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminStaffPage /></RutaProtegida>}
+      />
+
+      // En la sección de {/* ===== RUTAS DEL ADMIN ===== */}
+<Route path="/admin/configuracion"
+  element={<RutaProtegida rolesPermitidos={["admin"]}><AdminSettingsPage /></RutaProtegida>}
+/>
 
       <Route path="*" element={<Navigate to="/" replace />} />
 

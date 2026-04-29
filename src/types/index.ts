@@ -37,7 +37,7 @@
 //   role_id=2 → "secretaria"
 //   role_id=3 → "paciente"
 // Se usa para proteger rutas en App.tsx y redirigir al dashboard correcto.
-export type Rol = "psicologo" | "secretaria" | "paciente"
+export type Rol = "psicologo" | "secretaria" | "paciente"| "admin"
 
 
 // ===========================

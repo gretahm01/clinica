@@ -15,13 +15,13 @@ import NavbarPaciente from "../../components/layout/NavbarPaciente"
 // DATOS MOCK 
 // ===========================
 const NOTIFICACIONES_PACIENTE = [
-  {
+{
     id: 1,
     tipo: "cita_confirmada",
     mensaje: "Tu cita del miércoles ha sido confirmada",
     tiempo: "Hace 10 min",
     leida: false,
-  },
+},
 {
     id: 2,
     tipo: "nueva_tarea",
