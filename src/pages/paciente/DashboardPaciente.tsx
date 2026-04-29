@@ -142,7 +142,7 @@ export default function DashboardPaciente() {
     }
   } catch { alert("Error de conexión al reagendar") }
   finally { setProcesando(false) }
-}
+  }
 
   const citasProximas = citas
     .filter(c => !esPasada(c.fecha) && c.estado !== "cancelada" && c.estado !== "completada")

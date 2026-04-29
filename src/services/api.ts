@@ -408,11 +408,12 @@ export async function getCitasHoy() {
 
 //Agrege Funcion de Reagendar Cita,
 
-export async function reagendarCita(id: number, fecha: string, hora: string, motivo: string) {
+export async function reagendarCita(id: number, fecha: string, hora: string, motivo: string, estado: string = 'reagendada') {
   const response = await api.put<ApiResponse<Cita>>(`/citas/${id}/reagendar`, {
     fecha,
     hora,
-    motivo // <--- LO ENVIAMOS A PHP
+    motivo,
+    estado // <--- Ahora enviamos el estado dinámico
   })
   return response.data
 }
