@@ -276,6 +276,16 @@ export async function actualizarTarea(id: number, datos: Partial<Tarea>) {
   return response.data
 }
 
+export async function getTareasPaciente(pacienteId: number) {
+  const response = await api.get<ApiResponse<Tarea[]>>(`/tareas/paciente/${pacienteId}`)
+  return response.data
+}
+
+export async function eliminarTarea(id: number) {
+  const response = await api.delete<ApiResponse<null>>(`/tareas/${id}`)
+  return response.data
+}
+
 
 // ===========================
 // EXPEDIENTE CLÍNICO

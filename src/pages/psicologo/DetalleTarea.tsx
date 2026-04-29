@@ -1,38 +1,13 @@
 // ===========================
 // src/pages/psicologo/DetalleTarea.tsx
 // ===========================
-// Página de detalle de una tarea específica.
-// Se accede desde el perfil del paciente al picar una tarea.
-// Ruta: /psicologo/pacientes/:pacienteId/tareas/:tareaId
-//
-// El psicólogo puede:
-//   - Ver el contenido de la tarea
-//   - Ver si el paciente la entregó
-//   - Marcarla como revisada
-//   - Dejar un comentario al paciente
-// ===========================
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
 import type { Tarea } from "../../types"
+import { getTarea, actualizarTarea } from "../../services/api"
 
-// Datos mock — vendrán de getTarea(tareaId) cuando PHP esté listo
-const TAREA_EJEMPLO: Tarea = {
-  id: 1,
-  pacienteId: 1,
-  profesionalId: 1,
-  titulo: "Diario de emociones",
-  contenido: "Escribe cada noche cómo te sentiste durante el día y qué lo provocó. Intenta identificar al menos 3 emociones distintas por semana.",
-  fechaLimite: "2026-03-17",
-  estado: "entregada",
-  imagePath: undefined,
-  comentarioTerapeuta: "",
-  fechaCreacion: "2026-03-10",
-  fechaEntrega: "2026-03-16",
-}
-
-// Colores por estado de tarea
 function colorEstado(estado: string) {
   switch (estado) {
     case "revisada":  return "bg-green-50 text-green-600 border-green-100"
@@ -41,7 +16,6 @@ function colorEstado(estado: string) {
   }
 }
 
-// Texto descriptivo del estado
 function textoEstado(estado: string) {
   switch (estado) {
     case "revisada":  return "Ya revisada por el psicólogo"
@@ -54,44 +28,102 @@ export default function DetalleTarea() {
   const { pacienteId, tareaId } = useParams()
   const navigate = useNavigate()
 
-  // Cuando PHP esté listo: getTarea(tareaId)
-  const [tarea, setTarea] = useState<Tarea>(TAREA_EJEMPLO)
+  const [tarea, setTarea]       = useState<Tarea | null>(null)
+  const [cargando, setCargando] = useState(true)
+  const [error, setError]       = useState("")
+  const [comentario, setComentario] = useState("")
+  const [loading, setLoading]   = useState(false)
+  const [guardado, setGuardado] = useState(false)
 
-  // Comentario del terapeuta — editable
-  const [comentario, setComentario] = useState(tarea.comentarioTerapeuta ?? "")
-  const [loading, setLoading]       = useState(false)
-  const [guardado, setGuardado]     = useState(false)
+async function cargar() {
+    if (!tareaId) return
+    try {
+      setCargando(true)
+      const res = await getTarea(Number(tareaId))
+      if (res.success) {
+        setTarea(res.data)
+        setComentario(res.data.comentarioTerapeuta ?? "")
+      } else {
+        setError(res.message ?? "No se pudo cargar la tarea")
+      }
+    } catch {
+      setError("Error de conexión con el servidor")
+    } finally {
+      setCargando(false)
+    }
+  }
 
-  // Marca la tarea como revisada y guarda el comentario
-  // TODO: llamar a actualizarTarea(tareaId, { estado: "revisada", comentarioTerapeuta: comentario })
+  // useEffect corregido
+  useEffect(() => {
+    cargar()
+  }, [tareaId])
+
   async function handleMarcarRevisada() {
+    if (!tarea) return
     setLoading(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 800))
-      setTarea(prev => ({ ...prev, estado: "revisada", comentarioTerapeuta: comentario }))
-      setGuardado(true)
-      // TODO: PHP notifica al paciente que su tarea fue revisada
+      const res = await actualizarTarea(tarea.id, {
+        estado: "revisada",
+        comentarioTerapeuta: comentario,
+      })
+      if (res.success) {
+        setTarea(prev => prev ? { ...prev, estado: "revisada", comentarioTerapeuta: comentario } : prev)
+        setGuardado(true)
+      }
     } catch {
-      alert("Error al guardar. Intenta de nuevo.")
+      alert("Error de conexión")
     } finally {
       setLoading(false)
     }
   }
 
-  // Solo guarda el comentario sin cambiar el estado
   async function handleGuardarComentario() {
-    if (!comentario.trim()) return
+    if (!tarea || !comentario.trim()) return
     setLoading(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 600))
-      setTarea(prev => ({ ...prev, comentarioTerapeuta: comentario }))
-      setGuardado(true)
-      setTimeout(() => setGuardado(false), 3000)
+      const res = await actualizarTarea(tarea.id, {
+        comentarioTerapeuta: comentario,
+      })
+      if (res.success) {
+        setTarea(prev => prev ? { ...prev, comentarioTerapeuta: comentario } : prev)
+        setGuardado(true)
+        setTimeout(() => setGuardado(false), 3000)
+      } else {
+        alert(res.message ?? "Error al guardar comentario")
+      }
     } catch {
-      alert("Error al guardar. Intenta de nuevo.")
+      alert("Error de conexión")
     } finally {
       setLoading(false)
     }
+  }
+
+  if (cargando) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center py-32">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !tarea) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="text-center py-32">
+          <p className="text-red-500 font-medium">{error || "Tarea no encontrada"}</p>
+          <button
+            onClick={() => navigate(`/psicologo/pacientes/${pacienteId}`)}
+            className="mt-3 text-sm text-primary hover:underline"
+          >
+            Volver al perfil del paciente
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -100,7 +132,6 @@ export default function DetalleTarea() {
 
       <div className="max-w-3xl mx-auto p-6">
 
-        {/* Botón volver */}
         <button
           onClick={() => navigate(`/psicologo/pacientes/${pacienteId}`)}
           className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-dark transition-colors mb-6"
@@ -111,23 +142,20 @@ export default function DetalleTarea() {
           Volver al perfil del paciente
         </button>
 
-        {/* Header de la tarea */}
+        {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-dark mb-1">{tarea.titulo}</h1>
               <p className="text-xs text-slate-400">
                 Asignada el {new Date(tarea.fechaCreacion).toLocaleDateString("es-MX")}
-                {tarea.fechaLimite && ` · Entrega: ${new Date(tarea.fechaLimite).toLocaleDateString("es-MX")}`}
+                {tarea.fechaLimite && ` · Entrega: ${new Date(tarea.fechaLimite + "T12:00:00").toLocaleDateString("es-MX")}`}
               </p>
             </div>
-            {/* Badge de estado */}
             <span className={`text-xs px-3 py-1.5 rounded-full font-medium border capitalize flex-shrink-0 ${colorEstado(tarea.estado)}`}>
               {tarea.estado}
             </span>
           </div>
-
-          {/* Descripción del estado */}
           <p className="text-xs text-slate-400 mt-3 flex items-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -136,7 +164,7 @@ export default function DetalleTarea() {
           </p>
         </div>
 
-        {/* Contenido de la tarea */}
+        {/* Contenido */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-5">
           <h3 className="font-semibold text-dark mb-3 flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,7 +172,7 @@ export default function DetalleTarea() {
             </svg>
             Instrucciones de la tarea
           </h3>
-          <p className="text-sm text-dark leading-relaxed">{tarea.contenido}</p>
+          <p className="text-sm text-dark leading-relaxed">{tarea.contenido || "Sin instrucciones registradas"}</p>
         </div>
 
         {/* Entrega del paciente */}
@@ -155,7 +183,6 @@ export default function DetalleTarea() {
             </svg>
             Entrega del paciente
           </h3>
-
           {tarea.estado === "pendiente" ? (
             <div className="bg-background rounded-xl px-4 py-6 text-center">
               <p className="text-sm text-slate-400">El paciente aún no ha entregado esta tarea.</p>
@@ -169,7 +196,6 @@ export default function DetalleTarea() {
                   })}
                 </p>
               )}
-              {/* Archivo adjunto del paciente */}
               {tarea.imagePath ? (
                 <div className="flex items-center gap-3 bg-background rounded-xl p-3">
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -185,7 +211,7 @@ export default function DetalleTarea() {
                 </div>
               ) : (
                 <div className="bg-background rounded-xl px-4 py-4">
-                  <p className="text-sm text-slate-400">El paciente no adjuntó archivos en esta entrega.</p>
+                  <p className="text-sm text-slate-400">El paciente no adjuntó archivos.</p>
                 </div>
               )}
             </div>
@@ -201,25 +227,16 @@ export default function DetalleTarea() {
             Comentario para el paciente
           </h3>
           <p className="text-xs text-slate-400 mb-3">Este comentario será visible para el paciente.</p>
-
           <textarea
             value={comentario}
-            onChange={e => {
-              setComentario(e.target.value)
-              setGuardado(false)
-            }}
+            onChange={e => { setComentario(e.target.value); setGuardado(false) }}
             placeholder="Escribe tu retroalimentación sobre esta tarea..."
             rows={4}
             className="w-full border border-slate-200 rounded-xl px-4 py-3 text-dark placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm mb-3"
           />
-
-          {/* Indicador de guardado */}
           {guardado && (
-            <p className="text-xs text-green-500 flex items-center gap-1 mb-3">
-              ✓ Comentario guardado correctamente
-            </p>
+            <p className="text-xs text-green-500 flex items-center gap-1 mb-3">✓ Comentario guardado</p>
           )}
-
           <button
             onClick={handleGuardarComentario}
             disabled={loading || !comentario.trim()}
@@ -229,28 +246,26 @@ export default function DetalleTarea() {
           </button>
         </div>
 
-        {/* Botón marcar como revisada — solo si está entregada */}
+        {/* Marcar como revisada */}
         {tarea.estado === "entregada" && (
           <div className="bg-white rounded-2xl shadow-sm p-6">
             <h3 className="font-semibold text-dark mb-1">Marcar como revisada</h3>
             <p className="text-sm text-slate-400 mb-4">
-              Al marcar como revisada, el paciente recibirá una notificación indicando que su tarea fue revisada.
+              Al marcar como revisada el paciente sabrá que su tarea fue revisada.
             </p>
             <button
               onClick={handleMarcarRevisada}
               disabled={loading}
-              className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors"
+              className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors"
             >
-              {loading ? "Guardando..." : "✓ Marcar como revisada y notificar al paciente"}
+              {loading ? "Guardando..." : "✓ Marcar como revisada"}
             </button>
           </div>
         )}
 
-        {/* Mensaje si ya está revisada */}
         {tarea.estado === "revisada" && (
           <div className="bg-green-50 border border-green-100 rounded-2xl p-5 text-center">
             <p className="text-green-600 font-medium text-sm">✓ Esta tarea ya fue marcada como revisada</p>
-            <p className="text-green-500 text-xs mt-1">El paciente fue notificado.</p>
           </div>
         )}
 

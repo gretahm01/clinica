@@ -42,6 +42,9 @@ switch ($modulo) {
     case 'expediente':
     require __DIR__ . '/routes/expediente.php';
     break;
+    case 'tareas':
+    require __DIR__ . '/routes/tareas.php';
+    break;
 
     default:
         http_response_code(404);

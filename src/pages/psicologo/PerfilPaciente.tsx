@@ -5,9 +5,11 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
+import Swal from 'sweetalert2';
+import { Trash2 } from "lucide-react"; // Asegúrate de tener Trash2 para el icono
 import type { Paciente, Cita, Tarea, EstadoCita } from "../../types"
 import ModalNuevaTarea, { type DatosTarea } from "../../components/ui/ModalNuevaTarea"
-import { getPaciente, getCitasPorPaciente, cancelarCita, confirmarCita,guardarFeedback } from "../../services/api"
+import { getPaciente, getCitasPorPaciente, cancelarCita, confirmarCita,guardarFeedback, getTareasPorPaciente, crearTarea, eliminarTarea} from "../../services/api"
 
 function calcularEdad(fechaNacimiento: string) {
   const hoy = new Date()
@@ -42,7 +44,7 @@ export default function PerfilPaciente() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState("")
   const [citas, setCitas] = useState<Cita[]>([])
-  const tareas: Tarea[] = []
+  const [tareas, setTareas] = useState<Tarea[]>([])
 
   const [modalTareaAbierto, setModalTareaAbierto] = useState(false)
   const [citaSeleccionada, setCitaSeleccionada] = useState<Cita | null>(null)
@@ -60,11 +62,99 @@ const [loadingConfirmar, setLoadingConfirmar] = useState(false)
 
   const proximaCita = citas.find(c => c.estado === "confirmada")
 
+// Carga inicial de datos
   useEffect(() => {
     if (!pacienteId) return
-    cargarPaciente()
-    cargarCitas()
+    
+    async function cargarTodo() {
+        try {
+            setCargando(true)
+            await Promise.all([cargarPaciente(), cargarCitas(), cargarTareas()])
+        } finally {
+            setCargando(false)
+        }
+    }
+    cargarTodo()
   }, [pacienteId])
+
+  async function cargarTareas() {
+    const res = await getTareasPorPaciente(Number(pacienteId))
+    if (res.success) setTareas(res.data)
+      
+  }
+
+async function handleEliminarTarea(id: number) {
+  const resultado = await Swal.fire({
+    title: '¿Eliminar tarea?',
+    text: "Esta acción no se puede deshacer",
+    showCancelButton: true,
+    confirmButtonText: 'Sí, eliminar',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    // Estilos personalizados
+    background: '#ffffff',
+    color: '#334155', // Un gris oscuro/azul para el texto
+    confirmButtonColor: '#f87171', // Rojo suave (como el de tu diseño)
+    cancelButtonColor: '#94a3b8', // Gris azulado para el cancelar
+    padding: '2rem',
+    borderRadius: '1.5rem', // Muy redondeado como tu segundo modal
+    customClass: {
+      title: 'text-2xl font-bold text-slate-800 mb-4',
+      htmlContainer: 'text-slate-500 mb-6',
+      confirmButton: 'rounded-xl px-6 py-2.5 font-medium',
+      cancelButton: 'rounded-xl px-6 py-2.5 font-medium'
+    }
+  });
+
+  if (resultado.isConfirmed) {
+    try {
+      const res = await eliminarTarea(id);
+      if (res.success) {
+        setTareas(prev => prev.filter(t => t.id !== id));
+        
+        // Modal de éxito con el diseño limpio
+        Swal.fire({
+          title: '¡Tarea eliminada!',
+          icon: 'success',
+          iconColor: '#a3b18a', // Verde suave como tu botón de "Cerrar"
+          timer: 1500,
+          showConfirmButton: false,
+          borderRadius: '1.5rem',
+          background: '#ffffff'
+        });
+      }
+    } catch (error) {
+      Swal.fire({
+        title: 'Error',
+        text: 'No se pudo eliminar la tarea',
+        icon: 'error',
+        borderRadius: '1.5rem'
+      });
+    }
+  }
+}
+
+async function handleGuardarTarea(datos: DatosTarea) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await crearTarea({
+      pacienteId: Number(pacienteId),
+      profesionalId: 0,
+      titulo: datos.titulo,
+      contenido: datos.contenido,
+      fechaLimite: datos.fechaLimite,
+      estado: "pendiente",
+    } as any)
+    if (res.success) {
+      await cargarTareas()
+      setModalTareaAbierto(false)
+    } else {
+      alert(res.message ?? "Error al crear la tarea")
+    }
+  } catch {
+    alert("Error de conexión al crear la tarea")
+  }
+}
 
   async function cargarCitas() {
     try {
@@ -335,28 +425,45 @@ async function handleGuardarFeedback() {
                   + Nueva tarea
                 </button>
               </div>
+              
               {tareas.length === 0 ? (
                 <p className="text-sm text-slate-400">No hay tareas asignadas</p>
               ) : (
                 <div className="flex flex-col gap-3">
                   {tareas.map((tarea) => (
-                    <button
-                      key={tarea.id}
-                      onClick={() => navigate(`/psicologo/pacientes/${pacienteId}/tareas/${tarea.id}`)}
-                      className="flex items-center justify-between p-3 bg-background rounded-xl hover:bg-slate-100 transition-colors text-left w-full"
+                    <div 
+                      key={tarea.id} 
+                      className="group flex items-center gap-2"
                     >
-                      <div>
-                        <p className="text-sm font-medium text-dark">{tarea.titulo}</p>
-                        {tarea.fechaLimite && (
-                          <p className="text-xs text-slate-400">
-                            Entrega: {new Date(tarea.fechaLimite + "T12:00:00").toLocaleDateString("es-MX")}
-                          </p>
-                        )}
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${colorEstadoTarea(tarea.estado)}`}>
-                        {tarea.estado}
-                      </span>
-                    </button>
+                      {/* Botón principal de la tarea */}
+                      <button
+                        onClick={() => navigate(`/psicologo/pacientes/${pacienteId}/tareas/${tarea.id}`)}
+                        className="flex-1 flex items-center justify-between p-3 bg-background rounded-xl hover:bg-slate-100 transition-colors text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-dark">{tarea.titulo}</p>
+                          {tarea.fechaLimite && (
+                            <p className="text-xs text-slate-400">
+                              Entrega: {new Date(tarea.fechaLimite + "T12:00:00").toLocaleDateString("es-MX")}
+                            </p>
+                          )}
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${colorEstadoTarea(tarea.estado)}`}>
+                          {tarea.estado}
+                        </span>
+                      </button>
+
+                      {/* Botón de eliminar - Se ve al pasar el mouse por la tarea o siempre en móvil */}
+                      <button
+                        onClick={(e) => {
+                            e.stopPropagation(); // IMPORTANTE: evita que se abra la tarea al hacer clic en borrar
+                            handleEliminarTarea(tarea.id);
+                          }}
+                          className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors border border-red-100 flex items-center justify-center"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -369,10 +476,8 @@ async function handleGuardarFeedback() {
       <ModalNuevaTarea
         abierto={modalTareaAbierto}
         onCerrar={() => setModalTareaAbierto(false)}
-        onGuardar={(datos: DatosTarea) => {
-          console.log("Guardar tarea:", datos)
-          setModalTareaAbierto(false)
-        }}
+        // Aquí es donde le pasamos la función al modal:
+        onGuardar={handleGuardarTarea} 
         nombrePaciente={paciente ? `${paciente.nombre} ${paciente.apellido}` : ""}
         proximaCitaFecha={proximaCita?.fecha}
       />
