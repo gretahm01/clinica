@@ -9,65 +9,91 @@ import timeGridPlugin from "@fullcalendar/timegrid"
 import interactionPlugin from "@fullcalendar/interaction"
 import esLocale from "@fullcalendar/core/locales/es"
 import NavbarPaciente from "../../components/layout/NavbarPaciente"
+import SidebarPaciente from "../../components/layout/SidebarPaciente"
 import ModalSolicitarCita from "../../components/ui/ModalSolicitarCita"
 import { useAuth } from "../../hooks/useAuth"
-import { 
-  getCitasPorPaciente, 
-  getNotificaciones, 
-  marcarNotificacionesLeidas, 
-  confirmarCita, 
-  cancelarCita, 
-  reagendarCita, 
-  crearCita 
-} from "../../services/api"
-import type { Cita, EstadoCita } from "../../types"
+import { getCitasPorPaciente, confirmarCita, cancelarCita, reagendarCita, getNotificaciones, marcarNotificacionesLeidas } from "../../services/api"
+import type { Cita } from "../../types"
 
+// ===========================
+// FUNCIONES DE AYUDA
+// ===========================
 function colorEstadoCalendario(estado: string) {
-  const e = estado?.toLowerCase().trim();
-  switch (e) {
-    case "confirmada": return "#34d399" // Verde
-    case "pendiente":  return "#fb923c" // Naranja
-    case "reagendada": return "#f87171" // Rojo
-    case "completada": return "#60a5fa" // Azul
-    default:           return "#94a3b8" // Gris
+  switch (estado) {
+    case 'confirmada': return '#34d399';
+    case 'pendiente': return '#fb923c';
+    case 'reagendada': return '#f87171';
+    default: return '#94a3b8';
   }
 }
 
-function colorEstadoCita(estado: EstadoCita) {
-  const e = estado?.toLowerCase().trim();
-  switch (e) {
-    case "confirmada": return "bg-emerald-50 text-emerald-600 border border-emerald-100"
-    case "pendiente":  return "bg-orange-50 text-orange-600 border border-orange-100"
-    case "reagendada": return "bg-red-50 text-red-600 border border-red-100"
-    case "cancelada":  return "bg-slate-100 text-slate-500 border border-slate-200"
-    case "completada": return "bg-blue-50 text-blue-600 border border-blue-100"
-    default:           return "bg-slate-50 text-slate-500 border border-slate-100"
+function colorEstadoCita(estado: string) {
+  switch (estado) {
+    case 'confirmada': return 'bg-emerald-100 text-emerald-600';
+    case 'pendiente': return 'bg-orange-100 text-orange-600';
+    case 'reagendada': return 'bg-red-100 text-red-600';
+    default: return 'bg-slate-100 text-slate-500';
   }
 }
 
-function etiquetaEstadoCita(estado: EstadoCita) {
-  const e = estado?.toLowerCase().trim();
-  switch (e) {
-    case "confirmada": return "Confirmada"
-    case "pendiente":  return "Pendiente de confirmar"
-    case "cancelada":  return "Cancelada"
-    case "completada": return "Completada"
-    case "reagendada": return "Requiere tu confirmación"
-    default:           return estado
+function etiquetaEstadoCita(estado: string) {
+  switch (estado) {
+    case 'confirmada': return 'Confirmada';
+    case 'pendiente': return 'En Revisión';
+    case 'reagendada': return 'Reagendada / Propuesta';
+    default: return estado;
   }
 }
 
-function formatearFecha(fecha: string) {
-  return new Date(fecha + "T12:00:00").toLocaleDateString("es-MX", { 
-    weekday: "long", 
-    year: "numeric", 
-    month: "long", 
-    day: "numeric" 
-  })
+function formatearFecha(fechaStr: string) {
+  if (!fechaStr) return "";
+  const fecha = new Date(fechaStr + "T12:00:00");
+  return fecha.toLocaleDateString("es-MX", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function esPasada(fecha: string) {
-  return new Date(fecha + "T23:59:59") < new Date()
+function esPasada(fechaStr: string) {
+  if (!fechaStr) return false;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fechaCita = new Date(fechaStr + "T12:00:00");
+  fechaCita.setHours(0, 0, 0, 0);
+  return fechaCita < hoy;
+}
+
+function iconoNotificacion(tipo: string) {
+  switch (tipo) {
+    case "nueva_tarea":
+      return (
+        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </div>
+      )
+    default:
+      return (
+        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+      )
+  }
+}
+
+function calcularTiempo(fechaStr: string) {
+  if (!fechaStr) return "Hace un momento";
+  const fecha = new Date(fechaStr);
+  const ahora = new Date();
+  const segundos = Math.floor((ahora.getTime() - fecha.getTime()) / 1000);
+  if (segundos < 60) return "Hace un momento";
+  const minutos = Math.floor(segundos / 60);
+  if (minutos < 60) return `Hace ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `Hace ${horas} horas`;
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return "Ayer";
+  return `Hace ${dias} días`;
 }
 
 function obtenerMotivoLimpio(motivo: string) {
@@ -75,6 +101,9 @@ function obtenerMotivoLimpio(motivo: string) {
   return motivo.replace("[Paciente] ", "").replace("[Psicólogo] ", "");
 }
 
+// ===========================
+// COMPONENTE PRINCIPAL
+// ===========================
 export default function CalendarioPaciente() {
   const { usuario } = useAuth()
   
@@ -127,7 +156,7 @@ export default function CalendarioPaciente() {
           borderColor: colorEstadoCalendario(c.estado)
         })));
         
-        // Lógica de próxima cita igual a la del Dashboard
+        // Lógica de próxima cita
         const futuras = resCitas.data.filter((c: Cita) => !esPasada(c.fecha) && c.estado !== 'cancelada' && c.estado !== 'completada').sort((a: Cita, b: Cita) => a.fecha.localeCompare(b.fecha));
         setProximaCita(futuras.find((c: Cita) => c.estado === "confirmada") ?? futuras[0] ?? null);
       }
@@ -197,11 +226,18 @@ export default function CalendarioPaciente() {
     }
   }
 
+  const noLeidas = notificaciones.filter(n => !n.leida).length;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <NavbarPaciente />
       
       <div className="flex flex-1 overflow-hidden">
+        
+        <SidebarPaciente 
+          proximaCita={proximaCita ? { fecha: proximaCita.fecha, hora: proximaCita.hora.slice(0, 5) } : null}
+          onNuevaCita={() => setModalNuevaCitaAbierto(true)}
+        />
         
         <main className="flex-1 p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
@@ -245,6 +281,44 @@ export default function CalendarioPaciente() {
             />
           </div>
         </main>
+
+        <aside className="w-72 min-h-screen bg-white border-l border-slate-100 flex flex-col flex-shrink-0 overflow-y-auto hidden lg:flex">
+          <div className="p-4 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-dark">Notificaciones</h3>
+                {noLeidas > 0 && (
+                  <span className="w-5 h-5 bg-rose-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                    {noLeidas}
+                  </span>
+                )}
+              </div>
+              {noLeidas > 0 && (
+                <button onClick={handleMarcarLeidas} className="text-xs text-primary hover:text-primary-hover font-medium transition-colors">
+                  Marcar Leídas
+                </button>
+              )}
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              {notificaciones.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">No tienes notificaciones</p>
+              ) : (
+                notificaciones.map((notif) => (
+                  <div key={notif.id} className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${notif.leida ? "opacity-50" : "bg-slate-50"}`}>
+                    {iconoNotificacion(notif.tipo)}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-dark font-medium leading-snug">{notif.mensaje}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{calcularTiempo(notif.fecha)}</p>
+                    </div>
+                    {!notif.leida && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </aside>
+
       </div>
 
       {/* MODAL DETALLES DE CITA */}
