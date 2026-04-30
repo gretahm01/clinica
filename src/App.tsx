@@ -22,6 +22,7 @@ import DetalleTarea    from "./pages/psicologo/DetalleTarea"
 import DashboardPaciente    from "./pages/paciente/DashboardPaciente"
 import DetalleCita          from "./pages/paciente/DetalleCita"
 import DetalleTareaPaciente from "./pages/paciente/Detalletareapaciente"
+import ListaTareasPaciente  from "./pages/paciente/ListaTareasPaciente" // <--- NUEVA IMPORTACIÓN
 import PerfilPacientePage   from "./pages/paciente/PerfilPacientePage"
 import CalendarioPaciente   from "./pages/paciente/CalendarioPaciente"
 
@@ -111,6 +112,12 @@ export default function App() {
       <Route path="/paciente/citas/:citaId"
         element={<RutaProtegida rolesPermitidos={["paciente"]}><DetalleCita /></RutaProtegida>}
       />
+      
+      {/* ---> NUEVA RUTA: LISTA DE TAREAS <--- */}
+      <Route path="/paciente/tareas"
+        element={<RutaProtegida rolesPermitidos={["paciente"]}><ListaTareasPaciente /></RutaProtegida>}
+      />
+      
       <Route path="/paciente/tareas/:tareaId"
         element={<RutaProtegida rolesPermitidos={["paciente"]}><DetalleTareaPaciente /></RutaProtegida>}
       />

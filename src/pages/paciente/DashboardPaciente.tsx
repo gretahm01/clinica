@@ -2,7 +2,7 @@
 // src/pages/paciente/DashboardPaciente.tsx
 // ===========================
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "../../hooks/useAuth"
 import type { Cita, Tarea, EstadoCita } from "../../types"
 import ModalSolicitarCita from "../../components/ui/ModalSolicitarCita"
@@ -10,26 +10,15 @@ import NavbarPaciente from "../../components/layout/NavbarPaciente"
 import SidebarPaciente from "../../components/layout/SidebarPaciente"
 import { 
   getCitasPorPaciente, 
+  getTareasPorPaciente,
   cancelarCita, 
   reagendarCita, 
   crearCita, 
   confirmarCita, 
+  actualizarTarea, // <-- Agregado para el nuevo modal
   getNotificaciones, 
   marcarNotificacionesLeidas 
 } from "../../services/api"
-
-const TAREAS_MOCK: Tarea[] = [
-  { 
-    id: 1, 
-    pacienteId: 1, 
-    profesionalId: 1, 
-    titulo: "Diario de emociones", 
-    contenido: "Escribe cada noche cómo te sentiste durante el día.", 
-    fechaLimite: "2026-04-01", 
-    estado: "pendiente", 
-    fechaCreacion: "2026-03-20" 
-  },
-]
 
 function colorEstadoCita(estado: EstadoCita) {
   const e = estado?.toLowerCase().trim();
@@ -64,8 +53,8 @@ function formatearFecha(fecha: string) {
   })
 }
 
-function esPasada(fecha: string) { 
-  return new Date(fecha + "T23:59:59") < new Date() 
+function esPasada(fecha: string, hora: string = "23:59") { 
+  return new Date(`${fecha}T${hora}:00`) < new Date() 
 }
 
 function obtenerMotivoLimpio(motivo: string) {
@@ -77,13 +66,22 @@ export default function DashboardPaciente() {
   const { usuario } = useAuth()
   
   const [citas, setCitas] = useState<Cita[]>([]) 
+  const [tareas, setTareas] = useState<Tarea[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [notificaciones, setNotificaciones] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   
+  // MODALES
   const [modalCitaAbierto, setModalCitaAbierto] = useState(false)
-  const [seccionActiva, setSeccionActiva]       = useState<"citas" | "tareas">("citas")
   const [citaSeleccionada, setCitaSeleccionada] = useState<Cita | null>(null)
+  
+  // NUEVOS ESTADOS PARA TAREA EMERGENTE
+  const [tareaSeleccionada, setTareaSeleccionada] = useState<Tarea | null>(null)
+  const [textoEntrega, setTextoEntrega] = useState("")
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const inputArchivoRef = useRef<HTMLInputElement>(null)
+  const [loadingTarea, setLoadingTarea] = useState(false)
+  const [errorTarea, setErrorTarea] = useState("")
   
   const [procesando, setProcesando] = useState(false)
   const [modoReagendar, setModoReagendar] = useState(false)
@@ -91,7 +89,7 @@ export default function DashboardPaciente() {
   const [nuevaHora, setNuevaHora] = useState("")
   const [motivoReagendar, setMotivoReagendar] = useState("")
 
-  const generarHorarios = () => {
+  const opcionesHoras = (() => {
     const horas = [];
     for (let h = 8; h <= 20; h++) {
       const horaPad = h.toString().padStart(2, '0');
@@ -99,36 +97,34 @@ export default function DashboardPaciente() {
       if (h < 20) horas.push(`${horaPad}:30`);
     }
     return horas;
-  };
-  const opcionesHoras = generarHorarios();
+  })();
 
   useEffect(() => { 
     obtenerDatosGenerales(); 
   }, [usuario]);
 
   async function obtenerDatosGenerales() {
-    if (!usuario?.pacienteId) { 
+    const idCorrecto = (usuario as any)?.pacienteId || (usuario as any)?.id || usuario?.userId;
+    if (!idCorrecto) { 
       setCargando(false); 
       return; 
     }
     try {
-      const [resCitas, resNotif] = await Promise.all([
-        getCitasPorPaciente(Number(usuario.pacienteId)), 
+      const [resCitas, resTareas, resNotif] = await Promise.all([
+        getCitasPorPaciente(Number(idCorrecto)), 
+        getTareasPorPaciente(Number(idCorrecto)), 
         getNotificaciones()
       ])
       
       if (resCitas.success) setCitas(resCitas.data); 
+      if (resTareas.success) setTareas(resTareas.data); 
       if (resNotif.success) setNotificaciones(resNotif.data);
     } finally { 
       setCargando(false); 
     }
   }
 
-  async function handleMarcarLeidas() {
-    await marcarNotificacionesLeidas();
-    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
-  }
-
+  // CITA LOGIC
   function abrirModalCita(cita: Cita) { 
     setCitaSeleccionada(cita); 
     setModoReagendar(false); 
@@ -186,21 +182,57 @@ export default function DashboardPaciente() {
     }
   }
 
+  // TAREA LOGIC
+  function abrirModalTarea(tarea: Tarea) {
+    setTareaSeleccionada(tarea);
+    setTextoEntrega("");
+    setArchivo(null);
+    setErrorTarea("");
+  }
+
+  async function handleEntregarTarea() {
+    if (!textoEntrega.trim() && !archivo) {
+      return setErrorTarea("Escribe algo o adjunta un archivo para entregar la tarea.");
+    }
+    
+    setLoadingTarea(true);
+    setErrorTarea("");
+    
+    try {
+      const res = await actualizarTarea(Number(tareaSeleccionada!.id), { 
+        estado: "entregada"
+      } as Partial<Tarea>);
+
+      if (res.success) {
+        await obtenerDatosGenerales();
+        setTareaSeleccionada(null);
+      } else {
+        setErrorTarea(res.message || "No se pudo entregar la tarea.");
+      }
+    } catch {
+      setErrorTarea("Error de conexión al entregar. Intenta de nuevo.");
+    } finally {
+      setLoadingTarea(false);
+    }
+  }
+
   const citasProximas = citas
-    .filter(c => !esPasada(c.fecha) && c.estado !== "cancelada" && c.estado !== "completada")
-    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+    .filter(c => !esPasada(c.fecha, c.hora) && c.estado !== "cancelada" && c.estado !== "completada")
+    .sort((a, b) => new Date(`${a.fecha}T${a.hora}`).getTime() - new Date(`${b.fecha}T${b.hora}`).getTime())
 
   const historialCitas = citas
-    .filter(c => esPasada(c.fecha) || c.estado === "cancelada" || c.estado === "completada")
-    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+    .filter(c => esPasada(c.fecha, c.hora) || c.estado === "cancelada" || c.estado === "completada")
+    .sort((a, b) => new Date(`${b.fecha}T${b.hora}`).getTime() - new Date(`${a.fecha}T${a.hora}`).getTime())
 
-  const proximaCita = citasProximas.find(c => c.estado === "confirmada") ?? citasProximas[0] ?? null
-  const tareasPendientes = TAREAS_MOCK.filter(t => t.estado === "pendiente").length
+  const tareasPendientesLista = tareas.filter(t => (t.estado || "").toLowerCase().trim() === "pendiente")
 
   if (cargando) {
     return (
-      <div className="min-h-screen flex items-center justify-center animate-pulse bg-background">
-        <div className="text-primary font-bold text-lg">Cargando tu información...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-400 text-sm font-medium">Cargando tu información...</p>
+        </div>
       </div>
     )
   }
@@ -211,110 +243,106 @@ export default function DashboardPaciente() {
       
       <div className="flex flex-1 overflow-hidden">
         <SidebarPaciente 
-          citasProximasCount={citasProximas.length} 
-          tareasPendientesCount={tareasPendientes}
-          proximaCita={proximaCita} 
+          citasTotales={citasProximas} 
+          tareasTotales={tareasPendientesLista}
           notificaciones={notificaciones}
           onNuevaCita={() => setModalCitaAbierto(true)} 
+          onAbrirCita={abrirModalCita} 
+          onAbrirTarea={abrirModalTarea} // <-- Conectamos el click del sidebar al modal
           onMarcarLeidas={async () => { await marcarNotificacionesLeidas(); obtenerDatosGenerales(); }}
-          seccionActiva={seccionActiva} 
-          setSeccionActiva={setSeccionActiva} 
-          mostrarNavegacionInterna={true}
         />
 
         <main className="flex-1 overflow-y-auto p-6">
-          {seccionActiva === "citas" && (
-            <div>
-              <h1 className="text-2xl font-bold text-dark mb-6">Mis Citas</h1>
-              
-              {citasProximas.length > 0 && (
-                <div className="mb-8">
-                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                    Próximas y Pendientes
-                  </h2>
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    {citasProximas.map((cita) => (
-                      <div 
-                        key={cita.id} 
-                        onClick={() => abrirModalCita(cita)} 
-                        className="bg-white rounded-2xl p-5 cursor-pointer hover:shadow-md transition-all border border-slate-100 hover:border-primary group"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-primary/10 rounded-xl flex flex-col items-center justify-center">
-                              <p className="text-lg font-bold text-primary leading-none">
-                                {new Date(cita.fecha + "T12:00:00").getDate()}
-                              </p>
-                              <p className="text-[10px] font-bold uppercase text-primary mt-0.5">
-                                {new Date(cita.fecha + "T12:00:00").toLocaleDateString("es-MX", { month: "short" }).replace(".", "")}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="font-bold text-dark capitalize">
-                                {formatearFecha(cita.fecha)}
-                              </p>
-                              <p className="text-xs font-medium text-slate-500 mt-1">
-                                {cita.hora.slice(0, 5)} hrs
-                              </p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] px-2.5 py-1.5 rounded-md font-bold uppercase ${colorEstadoCita(cita.estado)}`}>
-                            {etiquetaEstadoCita(cita.estado)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {historialCitas.length > 0 && (
-                <div>
-                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                    Historial
-                  </h2>
-                  <div className="flex flex-col gap-2">
-                    {historialCitas.map((cita) => (
-                      <div 
-                        key={cita.id} 
-                        onClick={() => abrirModalCita(cita)} 
-                        className="bg-white rounded-xl px-5 py-4 cursor-pointer hover:shadow-sm transition-all border border-slate-100 hover:border-slate-200 flex items-center justify-between group"
-                      >
+          <div>
+            <h1 className="text-2xl font-bold text-dark mb-6">Mis Citas</h1>
+            
+            {citasProximas.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                  Próximas y Pendientes
+                </h2>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  {citasProximas.map((cita) => (
+                    <div 
+                      key={cita.id} 
+                      onClick={() => abrirModalCita(cita)} 
+                      className="bg-white rounded-2xl p-5 cursor-pointer hover:shadow-md transition-all border border-slate-100 hover:border-primary group"
+                    >
+                      <div className="flex items-start justify-between">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-slate-50 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                            <p className="text-sm font-bold text-slate-500 leading-none">
+                          <div className="w-12 h-12 bg-primary/10 rounded-xl flex flex-col items-center justify-center">
+                            <p className="text-lg font-bold text-primary leading-none">
                               {new Date(cita.fecha + "T12:00:00").getDate()}
                             </p>
-                            <p className="text-[9px] font-bold uppercase text-slate-400 mt-0.5">
+                            <p className="text-[10px] font-bold uppercase text-primary mt-0.5">
                               {new Date(cita.fecha + "T12:00:00").toLocaleDateString("es-MX", { month: "short" }).replace(".", "")}
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-dark capitalize">
-                              {new Date(cita.fecha + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
+                            <p className="font-bold text-dark capitalize">
+                              {formatearFecha(cita.fecha)}
                             </p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <p className="text-xs font-medium text-slate-400">
-                                {cita.hora.slice(0, 5)} hrs
-                              </p>
-                              {cita.feedback && (
-                                <span className="text-[10px] text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded">
-                                  Con nota
-                                </span>
-                              )}
-                            </div>
+                            <p className="text-xs font-medium text-slate-500 mt-1">
+                              {cita.hora.slice(0, 5)} hrs
+                            </p>
                           </div>
                         </div>
                         <span className={`text-[10px] px-2.5 py-1.5 rounded-md font-bold uppercase ${colorEstadoCita(cita.estado)}`}>
                           {etiquetaEstadoCita(cita.estado)}
                         </span>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+
+            {historialCitas.length > 0 && (
+              <div>
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                  Historial
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {historialCitas.map((cita) => (
+                    <div 
+                      key={cita.id} 
+                      onClick={() => abrirModalCita(cita)} 
+                      className="bg-white rounded-xl px-5 py-4 cursor-pointer hover:shadow-sm transition-all border border-slate-100 hover:border-slate-200 flex items-center justify-between group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-50 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                          <p className="text-sm font-bold text-slate-500 leading-none">
+                            {new Date(cita.fecha + "T12:00:00").getDate()}
+                          </p>
+                          <p className="text-[9px] font-bold uppercase text-slate-400 mt-0.5">
+                            {new Date(cita.fecha + "T12:00:00").toLocaleDateString("es-MX", { month: "short" }).replace(".", "")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-dark capitalize">
+                            {new Date(cita.fecha + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-xs font-medium text-slate-400">
+                              {cita.hora.slice(0, 5)} hrs
+                            </p>
+                            {cita.feedback && (
+                              <span className="text-[10px] text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded">
+                                Con nota
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] px-2.5 py-1.5 rounded-md font-bold uppercase ${colorEstadoCita(cita.estado)}`}>
+                        {etiquetaEstadoCita(cita.estado)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </main>
       </div>
 
@@ -340,7 +368,6 @@ export default function DashboardPaciente() {
               </button>
             </div>
 
-            {/* MÁQUINA DE ESTADOS PACIENTE */}
             {(() => {
               const estaPendiente = citaSeleccionada.estado === 'pendiente' || citaSeleccionada.estado === 'reagendada';
               const iniciadaPorPaciente = citaSeleccionada.motivo?.startsWith("[Paciente]");
@@ -351,24 +378,14 @@ export default function DashboardPaciente() {
                   <div className="mb-4">
                     {iniciadaPorPaciente ? (
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">
-                          En revisión
-                        </p>
-                        <p className="text-sm text-dark font-medium">
-                          El psicólogo está revisando tu solicitud.
-                        </p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">En revisión</p>
+                        <p className="text-sm text-dark font-medium">El psicólogo está revisando tu solicitud.</p>
                       </div>
                     ) : (
                       <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 text-center mb-3">
-                        <p className="text-[10px] text-orange-600 font-bold uppercase tracking-wider mb-1">
-                          Acción Requerida
-                        </p>
-                        <p className="text-sm text-dark font-medium mb-2">
-                          Tu psicólogo propone este horario.
-                        </p>
-                        {motivoLimpio && (
-                          <p className="text-xs text-orange-800 italic">"{motivoLimpio}"</p>
-                        )}
+                        <p className="text-[10px] text-orange-600 font-bold uppercase tracking-wider mb-1">Acción Requerida</p>
+                        <p className="text-sm text-dark font-medium mb-2">Tu psicólogo propone este horario.</p>
+                        {motivoLimpio && <p className="text-xs text-orange-800 italic">"{motivoLimpio}"</p>}
                       </div>
                     )}
                     
@@ -390,17 +407,14 @@ export default function DashboardPaciente() {
               return null;
             })()}
 
-            {/* Feedback del Psicólogo */}
             {citaSeleccionada.feedback && (
               <div className="mb-3 bg-blue-50 border border-blue-100 rounded-xl p-3">
-                <p className="text-[10px] text-blue-500 font-bold uppercase mb-1 tracking-wider">
-                  Nota de tu Psicólogo
-                </p>
+                <p className="text-[10px] text-blue-500 font-bold uppercase mb-1 tracking-wider">Nota de tu Psicólogo</p>
                 <p className="text-sm text-dark italic">"{citaSeleccionada.feedback}"</p>
               </div>
             )}
 
-            {!modoReagendar && citaSeleccionada.estado !== "completada" && citaSeleccionada.estado !== "cancelada" && !esPasada(citaSeleccionada.fecha) && (
+            {!modoReagendar && citaSeleccionada.estado !== "completada" && citaSeleccionada.estado !== "cancelada" && !esPasada(citaSeleccionada.fecha, citaSeleccionada.hora) && (
               <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-100">
                 <button 
                   onClick={() => setModoReagendar(true)} 
@@ -466,6 +480,90 @@ export default function DashboardPaciente() {
         </div>
       )}
 
+      {/* NUEVO MODAL: ENTREGA RÁPIDA DE TAREA */}
+      {tareaSeleccionada && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setTareaSeleccionada(null)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <span className="text-[10px] px-2.5 py-1 rounded-md font-bold uppercase bg-amber-50 text-amber-600 border border-amber-100">
+                  Pendiente
+                </span>
+                <h3 className="text-xl font-bold text-dark mt-3">{tareaSeleccionada.titulo}</h3>
+                <p className="text-amber-700 text-xs font-medium mt-1">
+                  {tareaSeleccionada.fechaLimite ? `Límite: ${new Date(tareaSeleccionada.fechaLimite + "T12:00:00").toLocaleDateString("es-MX", { day: 'numeric', month: 'short' })}` : 'Sin límite'}
+                </p>
+              </div>
+              <button onClick={() => setTareaSeleccionada(null)} className="text-slate-400 text-2xl hover:text-slate-600 transition-colors">
+                &times;
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-5">
+              <p className="text-sm text-slate-600 font-medium whitespace-pre-line leading-relaxed">
+                {tareaSeleccionada.contenido || "Sin instrucciones adicionales."}
+              </p>
+            </div>
+
+            {errorTarea && (
+              <div className="bg-red-50 text-red-600 text-sm font-medium px-4 py-3 rounded-xl mb-4 border border-red-100">
+                {errorTarea}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-dark mb-2">Tu respuesta</label>
+                <textarea
+                  value={textoEntrega}
+                  onChange={(e) => { setTextoEntrega(e.target.value); setErrorTarea("") }}
+                  placeholder="Escribe aquí tu respuesta, reflexiones..."
+                  rows={4}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-dark placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-dark mb-2">
+                  Archivo adjunto <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <div
+                  onClick={() => inputArchivoRef.current?.click()}
+                  className="w-full border-2 border-dashed border-slate-200 bg-slate-50 rounded-xl px-4 py-4 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+                >
+                  {archivo ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        <span className="text-sm font-bold text-dark truncate max-w-[150px]">{archivo.name}</span>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); setArchivo(null) }} className="text-slate-400 hover:text-red-500 font-bold text-xs px-2 py-1 rounded hover:bg-red-50">
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-bold text-slate-500">Haz clic para adjuntar un archivo</p>
+                    </div>
+                  )}
+                </div>
+                <input ref={inputArchivoRef} type="file" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] || null)} />
+              </div>
+            </div>
+
+            <button
+              onClick={handleEntregarTarea}
+              disabled={loadingTarea}
+              className="w-full mt-6 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors shadow-sm"
+            >
+              {loadingTarea ? "Enviando entrega..." : "Entregar tarea"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MODAL SOLICITAR CITA NUEVA */}
       <ModalSolicitarCita
         abierto={modalCitaAbierto}
@@ -474,9 +572,10 @@ export default function DashboardPaciente() {
           setProcesando(true);
           try {
             const motivoConEtiqueta = "[Paciente] " + (datos.motivo || "Solicito espacio");
+            const idCorrecto = (usuario as any)?.pacienteId || (usuario as any)?.id || usuario?.userId;
             
             const res = await crearCita({ 
-              pacienteId: Number(usuario?.pacienteId), 
+              pacienteId: Number(idCorrecto), 
               profesionalId: 1, 
               fecha: datos.fecha, 
               hora: datos.hora, 

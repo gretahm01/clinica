@@ -13,21 +13,29 @@ export interface DatosCita {
 }
 
 interface ModalNuevaCitaProps {
-  abierto: boolean
-  onCerrar: () => void
+  abierto?: boolean    // Para soportar tu código original
+  isOpen?: boolean     // Para soportar el código nuevo
+  onCerrar?: () => void
+  onClose?: () => void
   onGuardar: (datos: DatosCita) => void
-  pacientes: any[]
+  pacientes?: any[]    // Ahora es opcional
   fechaInicial?: string
 }
 
 export default function ModalNuevaCita({
   abierto,
+  isOpen,
   onCerrar,
+  onClose,
   onGuardar,
-  pacientes,
+  pacientes = [], // <--- ESTA ES LA MAGIA: Si no le pasan pacientes, usa un arreglo vacío en lugar de undefined
   fechaInicial = "",
 }: ModalNuevaCitaProps) {
   
+  // Compatibilidad para que funcione con ambas nomenclaturas
+  const isModalOpen = abierto || isOpen;
+  const handleCloseModal = onCerrar || onClose || (() => {});
+
   const [pacienteId, setPacienteId] = useState<string>("")
   const [fecha, setFecha] = useState(fechaInicial)
   const [hora, setHora] = useState("")
@@ -49,24 +57,25 @@ export default function ModalNuevaCita({
   // EFECTO 1: Si hay una fecha inicial (clic en calendario), la pone por defecto
   useEffect(() => {
     if (fechaInicial) setFecha(fechaInicial.split("T")[0]);
-  }, [fechaInicial, abierto]);
+  }, [fechaInicial, isModalOpen]);
 
-  // EFECTO 2 (MAGIA): Si solo hay 1 paciente en la lista (ej. desde el Perfil), lo selecciona automático
+  // EFECTO 2 (MAGIA): Si solo hay 1 paciente en la lista, lo selecciona automático
   useEffect(() => {
-    if (pacientes.length === 1) {
+    if (pacientes && pacientes.length === 1) {
       setPacienteId(String(pacientes[0].id));
     }
-  }, [pacientes, abierto]);
+  }, [pacientes, isModalOpen]);
 
-  if (!abierto) return null
+  if (!isModalOpen) return null
 
   function handleGuardar() {
-    if (!pacienteId) return setError("Selecciona un paciente")
+    // Solo exigimos seleccionar paciente si el componente recibió una lista de pacientes
+    if (pacientes.length > 0 && !pacienteId) return setError("Selecciona un paciente")
     if (!fecha) return setError("Selecciona una fecha")
     if (!hora) return setError("Selecciona una hora")
 
     onGuardar({
-      pacienteId: Number(pacienteId),
+      pacienteId: Number(pacienteId) || 0, // Fallback a 0, el padre (PerfilPaciente) lo sobreescribe
       fecha,
       hora,
       duracion: Number(duracion)
@@ -85,11 +94,11 @@ export default function ModalNuevaCita({
     if (pacientes.length > 1) setPacienteId("")
     setFecha("")
     setHora("")
-    onCerrar()
+    handleCloseModal()
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4" onClick={handleCerrar}>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={handleCerrar}>
       <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         
         <div className="flex items-center justify-between mb-6">
@@ -101,28 +110,30 @@ export default function ModalNuevaCita({
 
         <div className="space-y-4">
           
-          {/* SELECTOR DE PACIENTE INTELIGENTE */}
-          <div>
-            <label className="block text-sm font-medium text-dark mb-1">Paciente</label>
-            {pacientes.length === 1 ? (
-              // Si solo hay uno, mostramos su nombre bloqueado
-              <div className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-dark font-medium capitalize">
-                {pacientes[0].nombre} {pacientes[0].apellido}
-              </div>
-            ) : (
-              // Si hay muchos, mostramos el selector normal
-              <select 
-                value={pacienteId} 
-                onChange={(e) => setPacienteId(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-dark focus:ring-2 focus:ring-primary outline-none bg-white capitalize"
-              >
-                <option value="">Seleccionar paciente...</option>
-                {pacientes.map(p => (
-                  <option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>
-                ))}
-              </select>
-            )}
-          </div>
+          {/* SELECTOR DE PACIENTE INTELIGENTE (Solo se muestra si existen pacientes en la prop) */}
+          {pacientes.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-dark mb-1">Paciente</label>
+              {pacientes.length === 1 ? (
+                // Si solo hay uno, mostramos su nombre bloqueado
+                <div className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-dark font-medium capitalize">
+                  {pacientes[0].nombre} {pacientes[0].apellido}
+                </div>
+              ) : (
+                // Si hay muchos, mostramos el selector normal
+                <select 
+                  value={pacienteId} 
+                  onChange={(e) => setPacienteId(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-dark focus:ring-2 focus:ring-primary outline-none bg-white capitalize"
+                >
+                  <option value="">Seleccionar paciente...</option>
+                  {pacientes.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

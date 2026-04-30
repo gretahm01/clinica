@@ -9,7 +9,6 @@ import timeGridPlugin from "@fullcalendar/timegrid"
 import interactionPlugin from "@fullcalendar/interaction"
 import esLocale from "@fullcalendar/core/locales/es"
 import NavbarPaciente from "../../components/layout/NavbarPaciente"
-import SidebarPaciente from "../../components/layout/SidebarPaciente"
 import ModalSolicitarCita from "../../components/ui/ModalSolicitarCita"
 import { useAuth } from "../../hooks/useAuth"
 import { 
@@ -203,15 +202,6 @@ export default function CalendarioPaciente() {
       <NavbarPaciente />
       
       <div className="flex flex-1 overflow-hidden">
-        <SidebarPaciente 
-          citasProximasCount={citasCrudas.filter(c => !esPasada(c.fecha) && c.estado !== 'cancelada' && c.estado !== 'completada').length}
-          tareasPendientesCount={0}
-          proximaCita={proximaCita}
-          notificaciones={notificaciones}
-          onNuevaCita={() => setModalNuevaCitaAbierto(true)}
-          onMarcarLeidas={handleMarcarLeidas}
-          mostrarNavegacionInterna={false}
-        />
         
         <main className="flex-1 p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
