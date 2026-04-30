@@ -53,7 +53,7 @@ function formatearFecha(fecha: string): string {
 function FilaDato({ label, valor }: { label: string; valor: string }) {
   return (
     <div>
-      <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">{label}</p>
       <p className="text-sm text-dark font-medium">{valor}</p>
     </div>
   )
@@ -65,14 +65,14 @@ function CampoEditable({ label, value, onChange, type = "text", placeholder = ""
 }) {
   return (
     <div>
-      <label className="block text-xs text-slate-400 mb-1">{label}</label>
+      <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{label}</label>
       <input
         type={type}
         value={value}
         onChange={e => onChange?.(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className={`w-full border rounded-xl px-3 py-2.5 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary transition-colors ${
+        className={`w-full border rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary transition-colors ${
           disabled ? "bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed" : "border-slate-200 bg-white hover:border-slate-300"
         }`}
       />
@@ -85,15 +85,17 @@ function Seccion({ titulo, icono, color = "bg-slate-100", iconColor = "text-slat
   children: React.ReactNode; accion?: React.ReactNode
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 ${color} rounded-xl flex items-center justify-center ${iconColor}`}>{icono}</div>
-          <h3 className="font-semibold text-dark">{titulo}</h3>
-        </div>
+    <div className="bg-white rounded-2xl border border-slate-100 p-5 flex flex-col h-full shadow-sm">
+      <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+        <h3 className="text-base font-bold text-dark flex items-center gap-2">
+          <div className={`w-6 h-6 ${color} rounded-md flex items-center justify-center ${iconColor}`}>
+            {icono}
+          </div>
+          {titulo}
+        </h3>
         {accion}
       </div>
-      <div className="flex flex-col gap-4">{children}</div>
+      <div className="flex flex-col gap-3 flex-1">{children}</div>
     </div>
   )
 }
@@ -152,50 +154,43 @@ export default function PerfilPsicologo() {
   const [totalPacientes, setTotalPacientes] = useState(0)
   const [totalCitas, setTotalCitas]         = useState(0)
 
-useEffect(() => {
-  async function cargar() {
-    try {
-      // 1. Ejecutamos todas las peticiones
-      const [resPacientes, resCitas, resPerfil] = await Promise.all([
-        getPacientes(),
-        getCitas(),
-        getPerfilPsicologo()
-      ]);
+  useEffect(() => {
+    async function cargar() {
+      try {
+        const [resPacientes, resCitas, resPerfil] = await Promise.all([
+          getPacientes(),
+          getCitas(),
+          getPerfilPsicologo()
+        ]);
 
-      // 2. Corregimos el total de pacientes
-      if (resPacientes.success) {
-        setTotalPacientes(resPacientes.data.length);
+        if (resPacientes.success) {
+          setTotalPacientes(resPacientes.data.length);
+        }
+
+        if (resCitas.success) {
+          const citasValidas = resCitas.data.filter(
+            (cita: any) => cita.status !== 'cancelada'
+          );
+          setTotalCitas(citasValidas.length);
+        }
+
+        if (resPerfil.success) {
+          const datos = { 
+            ...(resPerfil.data as any), 
+            bio: (resPerfil.data as any).bio ?? "" 
+          };
+          setPsicologo(datos);
+          setEdicion(datos);
+        }
+      } catch (error) {
+        console.error("Error al cargar datos del perfil:", error);
+      } finally {
+        setCargando(false);
       }
-
-      // 3. CORRECCIÓN CLAVE: Filtrar citas no canceladas
-      if (resCitas.success) {
-        const citasValidas = resCitas.data.filter(
-          (cita: any) => cita.status !== 'cancelada'
-        );
-        setTotalCitas(citasValidas.length);
-      }
-
-      // 4. Cargar datos del perfil
-      if (resPerfil.success) {
-        const datos = { 
-          ...(resPerfil.data as any), 
-          bio: (resPerfil.data as any).bio ?? "" 
-        };
-        setPsicologo(datos);
-        setEdicion(datos);
-      }
-
-    } catch (error) {
-      console.error("Error al cargar datos del perfil:", error);
-    } finally {
-      setCargando(false);
     }
-  }
-
-  cargar();
-}, []);
+    cargar();
+  }, []);
   
-
   function handleIniciarEdicion() {
     if (psicologo) setEdicion({ ...psicologo })
     setModoEdicion(true)
@@ -255,203 +250,205 @@ useEffect(() => {
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
+        <Navbar />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-slate-400 text-sm font-medium">Cargando tu perfil...</p>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (!psicologo) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-red-500">No se pudo cargar el perfil</p>
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
+        <Navbar />
+        <div className="flex flex-1 flex-col items-center justify-center">
+          <p className="text-red-500 font-bold mb-4">No se pudo cargar la información de tu perfil.</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    // Altura bloqueada en Desktop para evitar scroll 
+    <div className="min-h-screen lg:h-screen bg-slate-50 flex flex-col lg:overflow-hidden">
       <Navbar />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         <Sidebar citasHoy={0} citasSemana={0} citasPendientes={0} proximasCitas={[]} onNuevaCita={() => {}} />
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden p-4 md:p-6 w-full max-w-5xl mx-auto">
 
-          <button onClick={() => navigate("/psicologo/dashboard")} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-dark transition-colors mb-5">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Volver al dashboard
-          </button>
-
-          {/* Header */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 mb-6">
-            <div className="flex items-start gap-6">
-              <div className="relative flex-shrink-0">
-                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white font-bold text-3xl shadow-lg">
-                  {psicologo.nombre[0]}{psicologo.apellido[0]}
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full border-2 border-white"></div>
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl font-bold text-dark">
-                      {psicologo.nombre} {psicologo.apellido} {psicologo.apellidoMaterno}
-                    </h1>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className="text-xs bg-primary bg-opacity-10 text-primary font-semibold px-3 py-1 rounded-full border border-primary border-opacity-20">
-                        {psicologo.especialidad}
-                      </span>
-                      <span className="text-xs bg-blue-50 text-blue-600 font-medium px-3 py-1 rounded-full border border-blue-100">
-                        {psicologo.rol}
-                      </span>
-                      <span className="text-xs text-slate-400 font-mono">#{psicologo.numerolicencia}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {modoEdicion ? (
-                      <>
-                        <button onClick={handleCancelarEdicion} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors font-medium">
-                          Cancelar
-                        </button>
-                        <button onClick={handleGuardarEdicion} className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-xl text-sm font-semibold transition-colors">
-                          Guardar cambios
-                        </button>
-                      </>
-                    ) : (
-                      <button onClick={handleIniciarEdicion} className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors font-medium">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Editar perfil
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {modoEdicion && (
-                  <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-600 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Modo edición activo — presiona "Guardar cambios" para aplicar
-                  </div>
-                )}
-              </div>
+          {/* ENCABEZADO OPTIMIZADO */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-2 mb-4 flex-shrink-0">
+            <div>
+              <button onClick={() => navigate("/psicologo/dashboard")} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-dark transition-colors mb-1 font-bold">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                </svg>
+                Volver al dashboard
+              </button>
+              <h1 className="text-2xl font-bold text-dark mb-0.5">Mi Perfil Profesional</h1>
             </div>
-
-                <div className="grid grid-cols-3 gap-4 mt-6 pt-5 border-t border-slate-100">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-dark">{totalPacientes}</p>
-                <p className="text-xs text-slate-400 mt-0.5">Pacientes activos</p>
-              </div>
-              <div className="text-center border-x border-slate-100">
-                <p className="text-2xl font-bold text-blue-500">{totalCitas}</p>
-                <p className="text-xs text-slate-400 mt-0.5">Citas este mes</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-rose-500">0</p>
-                <p className="text-xs text-slate-400 mt-0.5">Tareas por revisar</p>
-              </div>
+            
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {modoEdicion ? (
+                <>
+                  <button onClick={handleCancelarEdicion} className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors font-bold">
+                    Cancelar
+                  </button>
+                  <button onClick={handleGuardarEdicion} className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-bold transition-colors">
+                    Guardar
+                  </button>
+                </>
+              ) : (
+                <button onClick={handleIniciarEdicion} className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors font-bold">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Editar perfil
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {modoEdicion && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-600 flex items-center gap-2 mb-4 flex-shrink-0 font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Estás en modo edición. No olvides guardar tus cambios al terminar.
+            </div>
+          )}
 
-            {/* Datos personales */}
-            <Seccion titulo="Datos personales" color="bg-emerald-100" iconColor="text-emerald-600"
-              icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-            >
-              {modoEdicion && edicion ? (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <CampoEditable label="Nombre" value={edicion.nombre} onChange={v => setEdicion(p => p ? { ...p, nombre: v } : p)} />
-                    <CampoEditable label="Apellido paterno" value={edicion.apellido} onChange={v => setEdicion(p => p ? { ...p, apellido: v } : p)} />
+          {/* CUADRÍCULA PRINCIPAL (Absorbe el espacio restante) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 min-h-0 pb-4 lg:pb-0 overflow-y-auto lg:overflow-visible items-stretch">
+            
+            {/* COLUMNA 1: Tarjeta Principal de Identidad */}
+            <div className="md:col-span-2 lg:col-span-1 flex flex-col gap-4">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col items-center justify-center text-center h-full">
+                <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-white font-bold text-2xl uppercase mb-3 shadow-sm relative">
+                  {psicologo.nombre[0]}{psicologo.apellido[0]}
+                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white"></div>
+                </div>
+                <h2 className="text-lg font-bold text-dark capitalize mb-1">
+                  {psicologo.nombre} {psicologo.apellido} {psicologo.apellidoMaterno}
+                </h2>
+                <div className="flex flex-wrap items-center justify-center gap-1.5 mb-4">
+                  <span className="text-[9px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded border border-primary/20">
+                    {psicologo.especialidad}
+                  </span>
+                  <span className="text-[9px] bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
+                    {psicologo.rol}
+                  </span>
+                </div>
+                
+                {/* Minicuadrícula de métricas dentro del perfil */}
+                <div className="w-full grid grid-cols-2 gap-2 mt-auto pt-4 border-t border-slate-100">
+                  <div className="bg-slate-50 rounded-lg p-2">
+                    <p className="text-xl font-bold text-dark">{totalPacientes}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Pacientes</p>
                   </div>
-                  <CampoEditable label="Apellido materno" value={edicion.apellidoMaterno ?? ""} onChange={v => setEdicion(p => p ? { ...p, apellidoMaterno: v } : p)} />
-                  <CampoEditable label="Correo electrónico" value={edicion.email} disabled />
-                  <CampoEditable label="Teléfono" value={edicion.telefono ?? ""} onChange={v => setEdicion(p => p ? { ...p, telefono: v } : p)} type="tel" />
-                  <CampoEditable label="Fecha de nacimiento" value={edicion.fechaNacimiento ?? ""} onChange={v => setEdicion(p => p ? { ...p, fechaNacimiento: v } : p)} type="date" />
-                </>
-              ) : (
-                <>
-                  <FilaDato label="Nombre completo" valor={`${psicologo.nombre} ${psicologo.apellido}${psicologo.apellidoMaterno ? ` ${psicologo.apellidoMaterno}` : ""}`} />
-                  <FilaDato label="Correo electrónico" valor={psicologo.email} />
-                  <FilaDato label="Teléfono" valor={psicologo.telefono ?? "—"} />
-                  <FilaDato label="Fecha de nacimiento" valor={psicologo.fechaNacimiento ? `${formatearFecha(psicologo.fechaNacimiento)} (${calcularEdad(psicologo.fechaNacimiento)} años)` : "—"} />
-                </>
-              )}
-            </Seccion>
-
-            {/* Datos profesionales */}
-            <Seccion titulo="Datos profesionales" color="bg-blue-100" iconColor="text-blue-500"
-              icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-            >
-              <FilaDato label="Especialidad" valor={psicologo.especialidad ?? "—"} />
-              <FilaDato label="Número de licencia" valor={psicologo.numerolicencia ?? "—"} />
-              <FilaDato label="Rol en el sistema" valor={psicologo.rol ?? "—"} />
-              <FilaDato label="ID de profesional" valor={`#${psicologo.profesionalId}`} />
-            </Seccion>
-
-            {/* Horario */}
-            <Seccion titulo="Horario de atención" color="bg-violet-100" iconColor="text-violet-500"
-              accion={<span className="text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">Solo lectura</span>}
-              icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            >
-              <div className="flex flex-col gap-2">
-                {HORARIO.map((item) => (
-                  <div key={item.dia} className="flex items-center justify-between py-1.5">
-                    <span className="text-sm text-dark font-medium w-24">{item.dia}</span>
-                    <span className={`text-sm font-medium ${item.horas === "No disponible" ? "text-slate-300" : "text-emerald-600"}`}>{item.horas}</span>
-                    <div className={`w-2 h-2 rounded-full ${item.horas === "No disponible" ? "bg-slate-200" : "bg-emerald-400"}`} />
+                  <div className="bg-slate-50 rounded-lg p-2">
+                    <p className="text-xl font-bold text-blue-500">{totalCitas}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Citas (Mes)</p>
                   </div>
-                ))}
-              </div>
-            </Seccion>
-
-            {/* Seguridad */}
-            <Seccion titulo="Seguridad de la cuenta" color="bg-rose-100" iconColor="text-rose-500"
-              icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
-            >
-              <FilaDato label="Correo de acceso" valor={psicologo.email} />
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Sesión activa como</p>
-                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                  <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                  <p className="text-sm text-dark font-medium">{usuario?.nombre} {usuario?.apellido}</p>
-                  <span className="ml-auto text-xs text-emerald-500 font-medium">Activa</span>
                 </div>
               </div>
-              <button onClick={() => setModalContrasena(true)} className="w-full flex items-center gap-3 px-4 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors text-left group">
-                <div className="w-9 h-9 bg-rose-50 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-rose-100 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                  </svg>
+            </div>
+
+            {/* COLUMNA 2: Datos Personales */}
+            <div className="lg:col-span-1 h-full">
+              <Seccion titulo="Datos personales" color="bg-emerald-100" iconColor="text-emerald-600"
+                icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+              >
+                {modoEdicion && edicion ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <CampoEditable label="Nombre" value={edicion.nombre} onChange={v => setEdicion(p => p ? { ...p, nombre: v } : p)} />
+                      <CampoEditable label="Ap. Paterno" value={edicion.apellido} onChange={v => setEdicion(p => p ? { ...p, apellido: v } : p)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <CampoEditable label="Ap. Materno" value={edicion.apellidoMaterno ?? ""} onChange={v => setEdicion(p => p ? { ...p, apellidoMaterno: v } : p)} />
+                      <CampoEditable label="Teléfono" value={edicion.telefono ?? ""} onChange={v => setEdicion(p => p ? { ...p, telefono: v } : p)} type="tel" />
+                    </div>
+                    <CampoEditable label="Fecha de nacimiento" value={edicion.fechaNacimiento ?? ""} onChange={v => setEdicion(p => p ? { ...p, fechaNacimiento: v } : p)} type="date" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <FilaDato label="Nombre completo" valor={`${psicologo.nombre} ${psicologo.apellido}${psicologo.apellidoMaterno ? ` ${psicologo.apellidoMaterno}` : ""}`} />
+                    <FilaDato label="Teléfono" valor={psicologo.telefono ?? "—"} />
+                    <FilaDato label="Fecha de nacimiento" valor={psicologo.fechaNacimiento ? `${formatearFecha(psicologo.fechaNacimiento)} (${calcularEdad(psicologo.fechaNacimiento)} años)` : "—"} />
+                  </div>
+                )}
+              </Seccion>
+            </div>
+
+            {/* COLUMNA 3: Datos Profesionales y Seguridad (Apilados) */}
+            <div className="lg:col-span-1 flex flex-col gap-4 h-full">
+              <Seccion titulo="Datos profesionales" color="bg-blue-100" iconColor="text-blue-500"
+                icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <FilaDato label="ID Profesional" valor={`#${psicologo.profesionalId}`} />
+                  <FilaDato label="Num. Licencia" valor={psicologo.numerolicencia ?? "—"} />
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-dark">Cambiar contraseña</p>
-                  <p className="text-xs text-slate-400">Actualiza tu contraseña de acceso</p>
+              </Seccion>
+
+              <Seccion titulo="Seguridad" color="bg-rose-100" iconColor="text-rose-500"
+                icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
+              >
+                <FilaDato label="Correo de acceso" valor={psicologo.email} />
+                <button onClick={() => setModalContrasena(true)} className="w-full flex items-center gap-2 mt-auto pt-2 border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors text-left group">
+                  <div className="w-6 h-6 bg-rose-50 rounded flex items-center justify-center flex-shrink-0 group-hover:bg-rose-100 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-bold text-dark">Cambiar contraseña</span>
+                </button>
+              </Seccion>
+            </div>
+
+            {/* FILA INFERIOR: Horario de Atención (Ocupa las 3 columnas o 2 dependiendo) */}
+            <div className="md:col-span-2 lg:col-span-3">
+              <Seccion titulo="Horario de atención" color="bg-violet-100" iconColor="text-violet-500"
+                accion={<span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-bold uppercase tracking-widest">Solo lectura</span>}
+                icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+              >
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                  {HORARIO.map((item) => (
+                    <div key={item.dia} className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-dark mb-1">{item.dia}</p>
+                      <div className="flex items-center justify-center gap-1">
+                        <div className={`w-1.5 h-1.5 rounded-full ${item.horas === "No disponible" ? "bg-slate-300" : "bg-emerald-400"}`} />
+                        <span className={`text-[10px] font-bold ${item.horas === "No disponible" ? "text-slate-400" : "text-emerald-600"}`}>
+                          {item.horas === "No disponible" ? "Cerrado" : item.horas}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </button>
-            </Seccion>
+              </Seccion>
+            </div>
 
           </div>
         </main>
       </div>
 
-      {/* Modal cambiar contraseña */}
+      {/* Modal cambiar contraseña (Intacto) */}
       {modalContrasena && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={cerrarModalContrasena}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4" onClick={cerrarModalContrasena}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xl font-bold text-dark">Cambiar contraseña</h2>
               <button onClick={cerrarModalContrasena} className="text-slate-400 hover:text-slate-600 text-2xl leading-none">×</button>
             </div>
-            <p className="text-sm text-slate-400 mb-6">Tu nueva contraseña debe tener al menos 8 caracteres.</p>
+            <p className="text-sm text-slate-400 mb-6 font-medium">Tu nueva contraseña debe tener al menos 8 caracteres.</p>
 
             {exitoContrasena ? (
               <div className="text-center py-4">
@@ -460,27 +457,27 @@ useEffect(() => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <p className="font-semibold text-dark mb-1">¡Contraseña actualizada!</p>
-                <p className="text-sm text-slate-400 mb-6">Tu contraseña ha sido cambiada exitosamente.</p>
-                <button onClick={cerrarModalContrasena} className="w-full bg-primary hover:bg-primary-hover text-white font-medium py-2.5 rounded-xl transition-colors">Cerrar</button>
+                <p className="font-bold text-dark mb-1">¡Contraseña actualizada!</p>
+                <p className="text-sm text-slate-500 font-medium mb-6">Tu contraseña ha sido cambiada exitosamente.</p>
+                <button onClick={cerrarModalContrasena} className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-xl transition-colors">Cerrar</button>
               </div>
             ) : (
               <div className="space-y-4">
                 {errorContrasena && (
-                  <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">{errorContrasena}</div>
+                  <div className="bg-red-50 text-red-600 font-medium text-sm px-4 py-3 rounded-xl border border-red-100">{errorContrasena}</div>
                 )}
                 <CampoContrasena label="Contraseña actual" value={contrasenaActual} onChange={setContrasenaActual} mostrar={mostrarActual} onToggleMostrar={() => setMostrarActual(!mostrarActual)} />
                 <div className="border-t border-slate-100 pt-2" />
                 <CampoContrasena label="Nueva contraseña" value={contrasenaNueva} onChange={setContrasenaNueva} mostrar={mostrarNueva} onToggleMostrar={() => setMostrarNueva(!mostrarNueva)} placeholder="Mínimo 8 caracteres" />
                 <CampoContrasena label="Confirmar nueva contraseña" value={contrasenaConfirmar} onChange={setContrasenaConfirmar} mostrar={mostrarConfirmar} onToggleMostrar={() => setMostrarConfirmar(!mostrarConfirmar)} />
                 {contrasenaNueva && contrasenaConfirmar && (
-                  <p className={`text-xs ${contrasenaNueva === contrasenaConfirmar ? "text-emerald-500" : "text-red-400"}`}>
+                  <p className={`text-xs font-bold ${contrasenaNueva === contrasenaConfirmar ? "text-emerald-500" : "text-red-400"}`}>
                     {contrasenaNueva === contrasenaConfirmar ? "✓ Las contraseñas coinciden" : "✗ Las contraseñas no coinciden"}
                   </p>
                 )}
                 <div className="flex gap-3 pt-2">
-                  <button onClick={cerrarModalContrasena} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm">Cancelar</button>
-                  <button onClick={handleCambiarContrasena} disabled={loadingContrasena} className="flex-1 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-2.5 rounded-xl transition-colors font-medium text-sm">
+                  <button onClick={cerrarModalContrasena} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 transition-colors font-bold text-sm">Cancelar</button>
+                  <button onClick={handleCambiarContrasena} disabled={loadingContrasena} className="flex-1 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-2.5 rounded-xl transition-colors font-bold text-sm shadow-sm">
                     {loadingContrasena ? "Guardando..." : "Cambiar contraseña"}
                   </button>
                 </div>
