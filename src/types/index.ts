@@ -145,7 +145,9 @@ export interface ExpedienteClinico {
   eventosSignificativos?: string  // medical_record.significant_events
   historialAbuso?: string         // medical_record.abuse_history
   metasTerapeuticas?: string      // medical_record.therapeutic_goals
-  diagnosticos?: Diagnostico[]    // JOIN con medical_record_diagnosis + diagnosis
+  diagnosticos?: Diagnostico[]             // diagnósticos seleccionados del paciente
+  diagnosticosDisponibles?: Diagnostico[]  // catálogo completo (viene del GET)
+  diagnosticosIds?: number[]               // IDs a sincronizar (se usa en el PUT)
 }
 
 

@@ -41,6 +41,12 @@ switch ($modulo) {
     case 'profesional':
     require __DIR__ . '/routes/profesional.php';
     break;
+    case 'expediente':
+    require __DIR__ . '/routes/expediente.php';
+    break;
+    case 'tareas':
+    require __DIR__ . '/routes/tareas.php';
+    break;
 
     case 'notificaciones':
         require __DIR__ . '/routes/notificaciones.php';

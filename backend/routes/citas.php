@@ -8,7 +8,6 @@ verificarRol($usuario, ['psicologo', 'secretaria', 'paciente']);
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Obtenemos la ruta relativa
 $url    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $pos    = strpos($url, 'citas');
 $ruta   = substr($url, $pos + strlen('citas'));
@@ -21,16 +20,19 @@ $conn = conectarDB();
 // 1. OBTENER CITAS (MÉTODOS GET)
 // ============================================================
 
-// GET /citas/paciente/:id -> Citas de un paciente específico
+// --- GET /citas/paciente/:id ---
 if ($method === 'GET' && isset($partes[0]) && $partes[0] === 'paciente' && isset($partes[1]) && is_numeric($partes[1])) {
     $pacienteIdBusqueda = (int)$partes[1]; 
-
     if ($usuario['rol'] === 'paciente') {
         $stmtUser = $conn->prepare("SELECT patient_id FROM patient WHERE user_id = ?");
         $stmtUser->bind_param("i", $usuario['userId']);
         $stmtUser->execute();
         $resUser = $stmtUser->get_result();
-        if ($resUser->num_rows === 0) { http_response_code(403); echo json_encode(["success" => false]); exit(); }
+        if ($resUser->num_rows === 0) { 
+            http_response_code(403); 
+            echo json_encode(["success" => false]); 
+            exit(); 
+        }
         $pacienteIdBusqueda = $resUser->fetch_assoc()['patient_id'];
     }
 
@@ -45,13 +47,17 @@ if ($method === 'GET' && isset($partes[0]) && $partes[0] === 'paciente' && isset
     $stmt->bind_param("i", $pacienteIdBusqueda);
     $stmt->execute();
     $resultado = $stmt->get_result();
+    
     $citas = [];
-    while ($fila = $resultado->fetch_assoc()) { $citas[] = $fila; }
+    while ($fila = $resultado->fetch_assoc()) { 
+        $citas[] = $fila; 
+    }
+    
     echo json_encode(["success" => true, "data" => $citas]);
     exit();
 }
 
-// GET /citas/hoy -> Lista rápida para el Dashboard
+// --- GET /citas/hoy ---
 if ($method === 'GET' && isset($partes[0]) && $partes[0] === 'hoy') {
     $stmtProf = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
     $stmtProf->bind_param("i", $usuario['userId']);
@@ -59,7 +65,7 @@ if ($method === 'GET' && isset($partes[0]) && $partes[0] === 'hoy') {
     $profId = $stmtProf->get_result()->fetch_assoc()['professional_id'];
     
     $hoy = date('Y-m-d');
-    $sql = "SELECT a.appointment_id AS id, a.appointment_time AS hora, a.status AS estado, u.first_name AS nombre, u.last_name AS apellido 
+    $sql = "SELECT a.appointment_id AS id, a.appointment_time AS hora, a.status AS estado, u.first_name AS nombre, u.last_name AS apellido, a.motivo AS motivo 
             FROM appointment a 
             JOIN patient p ON a.patient_id = p.patient_id 
             JOIN user u ON p.user_id = u.user_id 
@@ -69,13 +75,17 @@ if ($method === 'GET' && isset($partes[0]) && $partes[0] === 'hoy') {
     $stmt->bind_param("is", $profId, $hoy);
     $stmt->execute();
     $res = $stmt->get_result();
+    
     $lista = [];
-    while ($f = $res->fetch_assoc()) { $lista[] = $f; }
+    while ($f = $res->fetch_assoc()) { 
+        $lista[] = $f; 
+    }
+    
     echo json_encode(["success" => true, "data" => $lista]);
     exit();
 }
 
-// GET /citas -> Todas las citas (Calendario)
+// --- GET /citas (Calendario Psicólogo) ---
 if ($method === 'GET' && empty($partes[0])) {
     $stmtProf = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
     $stmtProf->bind_param("i", $usuario['userId']);
@@ -83,16 +93,23 @@ if ($method === 'GET' && empty($partes[0])) {
     $profId = $stmtProf->get_result()->fetch_assoc()['professional_id'];
 
     $sql = "SELECT a.appointment_id AS id, a.appointment_date AS fecha, a.appointment_time AS hora, a.status AS estado,
+                   a.motivo AS motivo, a.feedback AS feedback, a.notes AS notas,
                    u.first_name AS pacienteNombre, u.last_name AS pacienteApellido 
-            FROM appointment a JOIN patient p ON a.patient_id = p.patient_id JOIN user u ON p.user_id = u.user_id 
+            FROM appointment a 
+            JOIN patient p ON a.patient_id = p.patient_id 
+            JOIN user u ON p.user_id = u.user_id 
             WHERE a.professional_id = ? AND a.status != 'cancelada'";
             
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $profId);
     $stmt->execute();
     $res = $stmt->get_result();
+    
     $lista = [];
-    while ($f = $res->fetch_assoc()) { $lista[] = $f; }
+    while ($f = $res->fetch_assoc()) { 
+        $lista[] = $f; 
+    }
+    
     echo json_encode(["success" => true, "data" => $lista]);
     exit();
 }
@@ -103,15 +120,13 @@ if ($method === 'GET' && empty($partes[0])) {
 if ($method === 'POST') {
     $body = json_decode(file_get_contents("php://input"), true);
     
-    // Mapeo correcto de React a Columnas DB
     $pacienteId = $body['pacienteId'] ?? null;
     $fecha      = $body['fecha'] ?? null;
     $hora       = $body['hora'] ?? null;
-    $motivo     = $body['motivo'] ?? 'Solicitada por paciente';
-    $estado     = $body['estado'] ?? 'pendiente';
+    $motivo     = $body['motivo'] ?? 'Solicitada por sistema';
+    $estado     = 'pendiente'; // SIEMPRE NACE PENDIENTE
     $duracion   = $body['duracion'] ?? 60;
     
-    // Si el logueado es psicólogo, tomamos su ID real
     if ($usuario['rol'] === 'psicologo') {
         $stmtP = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
         $stmtP->bind_param("i", $usuario['userId']);
@@ -131,11 +146,7 @@ if ($method === 'POST') {
     $stmt->bind_param("iissssi", $pacienteId, $profesionalId, $fecha, $hora, $estado, $motivo, $duracion);
     
     if ($stmt->execute()) {
-        // === LA NOTIFICACIÓN VA AQUÍ ADENTRO, ANTES DEL EXIT ===
-        $fechaCita = $body['fecha'];
-        $conn->query("INSERT INTO notificaciones (tipo, mensaje) VALUES ('cita_solicitada', 'Un paciente solicitó una nueva cita para el $fechaCita')");
-        // =======================================================
-        
+        $conn->query("INSERT INTO notificaciones (tipo, mensaje) VALUES ('cita_solicitada', 'Nueva cita pendiente en agenda')");
         echo json_encode(["success" => true]);
     } else {
         echo json_encode(["success" => false, "message" => $conn->error]);
@@ -143,7 +154,6 @@ if ($method === 'POST') {
     exit();
 }
 
-    
 // ============================================================
 // 3. ACCIONES DE CITA (MÉTODO PUT)
 // ============================================================
@@ -154,61 +164,41 @@ if ($method === 'PUT' && is_numeric($partes[0]) && isset($partes[1])) {
 
     if ($accion === 'confirmar') {
         $conn->query("UPDATE appointment SET status = 'confirmada' WHERE appointment_id = $id");
-        // Notificación de confirmación
-        $conn->query("INSERT INTO notificaciones (tipo, mensaje) VALUES ('cita_confirmada', 'Se ha confirmado una cita agendada o reagendada')");
+        $conn->query("INSERT INTO notificaciones (tipo, mensaje) VALUES ('cita_confirmada', 'Cita confirmada exitosamente')");
+        echo json_encode(["success" => true]);
     } 
     elseif ($accion === 'cancelar') {
         $conn->query("UPDATE appointment SET status = 'cancelada' WHERE appointment_id = $id");
-        // Notificación de cancelación
-        $conn->query("INSERT INTO notificaciones (tipo, mensaje) VALUES ('cita_cancelada', 'Una cita ha sido cancelada')");
+        echo json_encode(["success" => true]);
     }
     elseif ($accion === 'completar') {
         $conn->query("UPDATE appointment SET status = 'completada' WHERE appointment_id = $id");
+        echo json_encode(["success" => true]);
     }
     elseif ($accion === 'reagendar') {
-    // Recibimos el estado desde el body (pendiente o reagendada)
-    $nuevoEstado = $body['estado'] ?? 'reagendada'; 
-    
-    $stmt = $conn->prepare("UPDATE appointment SET appointment_date = ?, appointment_time = ?, status = ?, motivo = ? WHERE appointment_id = ?");
-    // Cambiamos a "ssssi" porque ahora enviamos 4 strings y 1 entero
-    $stmt->bind_param("ssssi", $body['fecha'], $body['hora'], $nuevoEstado, $body['motivo'], $id);
-    
-    if ($stmt->execute()) {
-        // Notificación para el psicólogo
-        $mensajeNotif = ($nuevoEstado === 'pendiente') 
-            ? "Un paciente solicitó cambiar el horario de su cita" 
-            : "Se propuso un cambio de horario para la cita";
-            
-        $conn->query("INSERT INTO notificaciones (tipo, mensaje) VALUES ('cita_reagendada', '$mensajeNotif')");
+        $nuevoEstado = $body['estado'] ?? 'pendiente'; 
+        $stmt = $conn->prepare("UPDATE appointment SET appointment_date = ?, appointment_time = ?, status = ?, motivo = ? WHERE appointment_id = ?");
+        $stmt->bind_param("ssssi", $body['fecha'], $body['hora'], $nuevoEstado, $body['motivo'], $id);
+        $stmt->execute();
+        echo json_encode(["success" => true]);
     }
-}
     elseif ($accion === 'feedback') {
         $stmt = $conn->prepare("UPDATE appointment SET feedback = ? WHERE appointment_id = ?");
         $stmt->bind_param("si", $body['feedback'], $id);
         $stmt->execute();
-    } 
+        echo json_encode(["success" => true]);
+    }
     elseif ($accion === 'notes') {
         $stmt = $conn->prepare("UPDATE appointment SET notes = ? WHERE appointment_id = ?");
         $stmt->bind_param("si", $body['notes'], $id);
         $stmt->execute();
+        echo json_encode(["success" => true]);
     }
-
-    echo json_encode(["success" => true]);
     exit();
 }
 
-if ($stmt->execute()) {
-        // === LA MAGIA AQUÍ ===
-        // Solo mandamos la notificación de "solicitud" si el estado es pendiente (creada por paciente)
-        if ($estado === 'pendiente') {
-            $fechaCita = $body['fecha'];
-            $conn->query("INSERT INTO notificaciones (tipo, mensaje) VALUES ('cita_solicitada', 'Un paciente solicitó una nueva cita para el $fechaCita')");
-        }
-        
-        echo json_encode(["success" => true]);
-    } else {
-        echo json_encode(["success" => false, "message" => $conn->error]);
-    }
-    exit();
-
+http_response_code(405);
+echo json_encode(["success" => false, "message" => "Metodo no permitido"]);
 $conn->close();
+
+

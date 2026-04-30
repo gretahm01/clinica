@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/xampp/htdocs/MedTrack/**)",
+      "Read(//c/xampp/mysql/data/**)",
+      "Read(//c/xampp/**)"
+    ]
+  }
+}
