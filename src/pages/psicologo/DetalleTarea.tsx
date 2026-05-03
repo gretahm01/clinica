@@ -6,13 +6,14 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
 import type { Tarea } from "../../types"
-import { getTarea, actualizarTarea } from "../../services/api"
+// CAMBIO IMPORTANTE: Importamos getPaciente
+import { getTarea, actualizarTarea, getPaciente } from "../../services/api"
 
 function colorEstado(estado: string) {
   switch (estado) {
-    case "revisada":  return "bg-green-50 text-green-600 border border-green-100"
+    case "revisada":  return "bg-emerald-50 text-emerald-600 border border-emerald-100"
     case "entregada": return "bg-blue-50 text-blue-600 border border-blue-100"
-    default:          return "bg-yellow-50 text-yellow-600 border border-yellow-100"
+    default:          return "bg-amber-50 text-amber-600 border border-amber-100"
   }
 }
 
@@ -29,6 +30,7 @@ export default function DetalleTarea() {
   const navigate = useNavigate()
 
   const [tarea, setTarea]       = useState<Tarea | null>(null)
+  const [pacienteNombre, setPacienteNombre] = useState("") // NUEVO: Estado para el nombre
   const [cargando, setCargando] = useState(true)
   const [error, setError]       = useState("")
   const [comentario, setComentario] = useState("")
@@ -37,16 +39,26 @@ export default function DetalleTarea() {
 
   useEffect(() => {
     async function cargar() {
-      if (!tareaId) return
+      if (!tareaId || !pacienteId) return
       try {
         setCargando(true)
-        const res = await getTarea(Number(tareaId))
-        if (res.success) {
-          setTarea(res.data)
-          setComentario(res.data.comentarioTerapeuta ?? "")
+        // NUEVO: Hacemos ambas peticiones al mismo tiempo
+        const [resTarea, resPaciente] = await Promise.all([
+          getTarea(Number(tareaId)),
+          getPaciente(Number(pacienteId))
+        ])
+
+        if (resTarea.success) {
+          setTarea(resTarea.data)
+          setComentario(resTarea.data.comentarioTerapeuta ?? "")
         } else {
-          setError(res.message ?? "No se pudo cargar la tarea")
+          setError(resTarea.message ?? "No se pudo cargar la tarea")
         }
+
+        if (resPaciente.success && resPaciente.data) {
+          setPacienteNombre(`${resPaciente.data.nombre} ${resPaciente.data.apellido}`)
+        }
+
       } catch {
         setError("Error de conexión con el servidor")
       } finally {
@@ -54,7 +66,7 @@ export default function DetalleTarea() {
       }
     }
     cargar()
-  }, [tareaId])
+  }, [tareaId, pacienteId])
 
   async function handleMarcarRevisada() {
     if (!tarea) return
@@ -74,7 +86,7 @@ export default function DetalleTarea() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const mensaje = err.response?.data?.message || "Error crítico al comunicar con la base de datos";
-      alert("Error SQL: " + mensaje);
+      alert("Error: " + mensaje);
     } finally {
       setLoading(false)
     }
@@ -97,7 +109,7 @@ export default function DetalleTarea() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const mensaje = err.response?.data?.message || "Error al guardar el comentario";
-      alert("Error SQL: " + mensaje);
+      alert("Error: " + mensaje);
     } finally {
       setLoading(false)
     }
@@ -105,9 +117,9 @@ export default function DetalleTarea() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-slate-50 flex flex-col">
         <Navbar />
-        <div className="flex items-center justify-center py-32">
+        <div className="flex flex-1 items-center justify-center">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -116,15 +128,15 @@ export default function DetalleTarea() {
 
   if (error || !tarea) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-slate-50 flex flex-col">
         <Navbar />
         <div className="text-center py-32">
           <p className="text-red-500 font-medium">{error || "Tarea no encontrada"}</p>
           <button
-            onClick={() => navigate(`/psicologo/pacientes/${pacienteId}`)}
+            onClick={() => navigate(-1)}
             className="mt-3 text-sm text-primary hover:underline font-medium"
           >
-            Volver al perfil del paciente
+            Regresar
           </button>
         </div>
       </div>
@@ -132,16 +144,16 @@ export default function DetalleTarea() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar />
 
-      <div className="max-w-3xl mx-auto p-6">
+      <div className="max-w-3xl mx-auto p-6 w-full">
 
         <button
-          onClick={() => navigate(`/psicologo/pacientes/${pacienteId}`)}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-sm text-slate-400 hover:text-dark transition-colors mb-6 font-medium"
         >
-          ← Volver al perfil del paciente
+          ← Regresar
         </button>
 
         {/* Header */}
@@ -149,12 +161,23 @@ export default function DetalleTarea() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-dark mb-1">{tarea.titulo}</h1>
+              
+              {/* NUEVO: Mostrar el nombre del paciente */}
+              {pacienteNombre && (
+                <p className="text-sm font-bold text-primary mb-3 flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  {pacienteNombre}
+                </p>
+              )}
+
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Asignada el {new Date(tarea.fechaCreacion).toLocaleDateString("es-MX", { day: 'numeric', month: 'short', year: 'numeric'})}
-                {tarea.fechaLimite && ` · Entrega: ${new Date(tarea.fechaLimite + "T12:00:00").toLocaleDateString("es-MX", { day: 'numeric', month: 'short', year: 'numeric'})}`}
+                {tarea.fechaCreacion ? `Asignada el ${new Date(tarea.fechaCreacion).toLocaleDateString("es-MX", { day: 'numeric', month: 'short', year: 'numeric'})}` : 'Fecha de asignación desconocida'}
+                {tarea.fechaLimite && ` · Límite: ${new Date(tarea.fechaLimite + "T12:00:00").toLocaleDateString("es-MX", { day: 'numeric', month: 'short', year: 'numeric'})}`}
               </p>
             </div>
-            <span className={`text-[10px] px-2.5 py-1.5 rounded-md font-bold uppercase tracking-wider flex-shrink-0 ${colorEstado(tarea.estado)}`}>
+            <span className={`text-[10px] px-2.5 py-1.5 rounded-md font-bold uppercase tracking-wider flex-shrink-0 ${colorEstado(tarea.estado || 'pendiente')}`}>
               {tarea.estado}
             </span>
           </div>
@@ -162,11 +185,11 @@ export default function DetalleTarea() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {textoEstado(tarea.estado)}
+            {textoEstado(tarea.estado || 'pendiente')}
           </p>
         </div>
 
-        {/* Contenido */}
+        {/* Contenido / Instrucciones */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-5 border border-slate-100">
           <h3 className="font-bold text-dark mb-3 flex items-center gap-2 border-b border-slate-100 pb-3">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -174,17 +197,37 @@ export default function DetalleTarea() {
             </svg>
             Instrucciones de la tarea
           </h3>
-          <p className="text-sm text-dark leading-relaxed whitespace-pre-wrap">{tarea.contenido || "Sin instrucciones registradas"}</p>
+          <p className="text-sm text-dark leading-relaxed whitespace-pre-wrap mb-4">
+            {tarea.contenido || "Sin instrucciones registradas"}
+          </p>
+
+          {/* Mostrar Material de Apoyo (El archivo que subió el psicólogo) */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {(tarea as any).materialApoyo && (
+            <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 px-4 py-3 rounded-xl w-fit">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-blue-800">Material de apoyo adjunto</p>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <button onClick={() => window.open((tarea as any).materialApoyo, '_blank')} className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium">
+                  Hacer clic para ver
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Entrega del paciente */}
+        {/* Entrega del paciente (Texto y Archivo) */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-5 border border-slate-100">
-          <h3 className="font-bold text-dark mb-3 flex items-center gap-2 border-b border-slate-100 pb-3">
+          <h3 className="font-bold text-dark mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
             Entrega del paciente
           </h3>
+          
           {tarea.estado === "pendiente" ? (
             <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-8 text-center">
               <p className="text-sm text-slate-400 font-medium">El paciente aún no ha entregado esta tarea.</p>
@@ -198,28 +241,40 @@ export default function DetalleTarea() {
                   })}
                 </p>
               )}
+
+              {/* TEXTO DE RESPUESTA DEL PACIENTE */}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {(tarea as any).respuestaPaciente && (
+                <div className="mb-4 bg-slate-50 border border-slate-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Comentarios del paciente</p>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <p className="text-sm text-dark whitespace-pre-wrap">{((tarea as any).respuestaPaciente)}</p>
+                </div>
+              )}
+
+              {/* ARCHIVO ADJUNTO DEL PACIENTE */}
               {tarea.imagePath ? (
-                <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 rounded-xl p-4">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="flex items-center gap-4 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-dark truncate">Archivo adjunto</p>
-                    <p className="text-xs text-slate-500 truncate">{tarea.imagePath}</p>
+                    <p className="text-sm font-bold text-emerald-800 truncate">Archivo entregado</p>
+                    <button onClick={() => window.open(tarea.imagePath, '_blank')} className="text-xs text-emerald-600 hover:underline truncate block w-full text-left">
+                      {tarea.imagePath.split('/').pop()}
+                    </button>
                   </div>
                   <button 
                     onClick={() => window.open(tarea.imagePath, '_blank')}
-                    className="ml-auto text-xs bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary px-3 py-1.5 rounded-lg font-bold transition-colors"
+                    className="ml-auto text-xs bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 px-4 py-2 rounded-lg font-bold transition-colors"
                   >
                     Ver archivo
                   </button>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-6 text-center">
-                  <p className="text-sm text-slate-400 font-medium">El paciente no adjuntó archivos para esta tarea.</p>
-                </div>
+                <p className="text-sm text-slate-400 font-medium italic mt-2">El paciente no adjuntó archivos extras.</p>
               )}
             </div>
           )}
@@ -282,7 +337,7 @@ export default function DetalleTarea() {
         )}
 
         {tarea.estado === "revisada" && (
-          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 text-center shadow-sm">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 text-center shadow-sm mt-5">
             <p className="text-emerald-600 font-bold text-sm flex items-center justify-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
               Esta tarea ya fue marcada como revisada

@@ -81,7 +81,7 @@ try {
         if (!$profId) {
             http_response_code(404); echo json_encode(["success" => false, "message" => "Profesional no encontrado"]); exit();
         }
-        $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, professional_id AS profesionalId, title AS titulo, content AS contenido, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, created_at AS fechaCreacion, delivered_at AS fechaEntrega, therapist_comment AS comentarioTerapeuta FROM task WHERE professional_id = ? ORDER BY created_at DESC");
+        $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, professional_id AS profesionalId, title AS titulo, content AS contenido, material_path AS materialApoyo, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, created_at AS fechaCreacion, delivered_at AS fechaEntrega, therapist_comment AS comentarioTerapeuta FROM task WHERE professional_id = ? ORDER BY created_at DESC");
         $stmt->bind_param("i", $profId);
         $stmt->execute();
         $resultado = $stmt->get_result();
@@ -95,7 +95,7 @@ try {
         if (!pacienteEsMio($conn, $subId, $profId, $usuario)) {
             http_response_code(403); echo json_encode(["success" => false, "message" => "Acceso denegado a este paciente"]); exit();
         }
-        $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, professional_id AS profesionalId, title AS titulo, content AS contenido, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, created_at AS fechaCreacion, delivered_at AS fechaEntrega, therapist_comment AS comentarioTerapeuta FROM task WHERE patient_id = ? ORDER BY created_at DESC");
+        $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, professional_id AS profesionalId, title AS titulo, content AS contenido, material_path AS materialApoyo, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, created_at AS fechaCreacion, delivered_at AS fechaEntrega, therapist_comment AS comentarioTerapeuta FROM task WHERE patient_id = ? ORDER BY created_at DESC");
         $stmt->bind_param("i", $subId);
         $stmt->execute();
         $resultado = $stmt->get_result();
@@ -105,23 +105,42 @@ try {
         $stmt->close(); $conn->close(); exit();
     }
 
+    // === CREAR TAREA (PSICÓLOGO) AHORA LEE $_POST PORQUE USAMOS FORMDATA ===
     if ($method === 'POST' && empty($subPath)) {
-        $body = json_decode(file_get_contents("php://input"), true);
-        $pacienteId  = intval($body['pacienteId']  ?? 0);
-        $titulo      = trim($body['titulo']        ?? '');
-        $contenido   = trim($body['contenido']     ?? '');
-        $fechaLimite = trim($body['fechaLimite']   ?? '');
+        $pacienteId  = intval($_POST['pacienteId']  ?? 0);
+        $titulo      = trim($_POST['titulo']        ?? '');
+        $contenido   = trim($_POST['contenido']     ?? '');
+        $fechaLimite = trim($_POST['fechaLimite']   ?? '');
 
         if (!$pacienteId || !$titulo || !$contenido) {
-            http_response_code(400); echo json_encode(["success" => false, "message" => "Faltan datos"]); exit();
+            http_response_code(400); echo json_encode(["success" => false, "message" => "Faltan datos requeridos"]); exit();
         }
         if (!pacienteEsMio($conn, $pacienteId, $profId, $usuario)) {
             http_response_code(403); echo json_encode(["success" => false, "message" => "Acceso denegado a este paciente"]); exit();
         }
+
+        // Subida del material de apoyo (Psicólogo)
+        $dbMaterialPath = null;
+        if (isset($_FILES['archivo']) && $_FILES['archivo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/../uploads/tareas/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            
+            $fileName = time() . '_psicologo_' . preg_replace("/[^a-zA-Z0-9.-]/", "_", $_FILES['archivo']['name']);
+            $targetFilePath = $uploadDir . $fileName;
+            
+            if (move_uploaded_file($_FILES['archivo']['tmp_name'], $targetFilePath)) {
+                $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
+                $host = $_SERVER['HTTP_HOST'];
+                $dbMaterialPath = $protocol . "://" . $host . "/clinica/backend/uploads/tareas/" . $fileName;
+            }
+        }
+
         $status = 'pendiente';
         $fechaLimiteVal = $fechaLimite ?: null;
-        $stmt = $conn->prepare("INSERT INTO task (patient_id, professional_id, title, content, due_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
-        $stmt->bind_param("iissss", $pacienteId, $profId, $titulo, $contenido, $fechaLimiteVal, $status);
+        $stmt = $conn->prepare("INSERT INTO task (patient_id, professional_id, title, content, due_date, status, created_at, material_path) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)");
+        $stmt->bind_param("iisssss", $pacienteId, $profId, $titulo, $contenido, $fechaLimiteVal, $status, $dbMaterialPath);
         $stmt->execute();
         $newId = $conn->insert_id;
         $stmt->close();
@@ -135,6 +154,7 @@ try {
             http_response_code(403); echo json_encode(["success" => false, "message" => "Acceso denegado a esta tarea"]); exit();
         }
         
+        // === ENTREGAR TAREA (PACIENTE) ===
         if ($method === 'POST' && isset($partes[1]) && $partes[1] === 'entregar') {
             $texto = $_POST['texto'] ?? '';
             $dbFilePath = null;
@@ -151,7 +171,6 @@ try {
                 if (move_uploaded_file($_FILES['archivo']['tmp_name'], $targetFilePath)) {
                     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
                     $host = $_SERVER['HTTP_HOST'];
-                    // CORREGIDO: Ruta con /clinica/ en lugar de /medtrack/
                     $dbFilePath = $protocol . "://" . $host . "/clinica/backend/uploads/tareas/" . $fileName;
                 }
             }
@@ -165,7 +184,8 @@ try {
         }
 
         if ($method === 'GET') {
-            $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, title AS titulo, content AS contenido, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, therapist_comment AS comentarioTerapeuta FROM task WHERE task_id = ?");
+            // CORREGIDO: Se agregaron created_at y delivered_at que se habían borrado sin querer
+            $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, title AS titulo, content AS contenido, material_path AS materialApoyo, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, created_at AS fechaCreacion, delivered_at AS fechaEntrega, therapist_comment AS comentarioTerapeuta FROM task WHERE task_id = ?");
             $stmt->bind_param("i", $tareaId);
             $stmt->execute();
             $resultado = $stmt->get_result();

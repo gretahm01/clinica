@@ -17,6 +17,7 @@ import Expedientes     from "./pages/psicologo/Expedientes"
 import PerfilPaciente  from "./pages/psicologo/PerfilPaciente"
 import PerfilPsicologo from "./pages/psicologo/PerfilPsicologo"
 import DetalleTarea    from "./pages/psicologo/DetalleTarea"
+import ListaTareasPsicologo from "./pages/psicologo/ListaTareasPsicologo" // ¡NUEVO IMPORT!
 
 // ===== PÁGINAS DEL PACIENTE =====
 import DashboardPaciente    from "./pages/paciente/DashboardPaciente"
@@ -96,6 +97,10 @@ export default function App() {
       />
       <Route path="/psicologo/perfil"
         element={<RutaProtegida rolesPermitidos={["psicologo"]}><PerfilPsicologo /></RutaProtegida>}
+      />
+      {/* ¡NUEVA RUTA DE TAREAS GENERALES! */}
+      <Route path="/psicologo/tareas"
+        element={<RutaProtegida rolesPermitidos={["psicologo"]}><ListaTareasPsicologo /></RutaProtegida>}
       />
       <Route path="/psicologo/pacientes/:pacienteId/tareas/:tareaId"
         element={<RutaProtegida rolesPermitidos={["psicologo"]}><DetalleTarea /></RutaProtegida>}

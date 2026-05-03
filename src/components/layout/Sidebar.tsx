@@ -28,7 +28,7 @@ const navItems = [
     path: "/psicologo/dashboard",
     icono: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
       </svg>
     ),
   },
@@ -41,6 +41,16 @@ const navItems = [
       </svg>
     ),
   },
+  // NUEVO BOTÓN PARA TAREAS
+  {
+    label: "Tareas",
+    path: "/psicologo/tareas",
+    icono: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    ),
+  },
 ]
 
 export default function Sidebar({ onNuevaCita }: SidebarProps) {
@@ -49,11 +59,6 @@ export default function Sidebar({ onNuevaCita }: SidebarProps) {
 
   return (
     <aside className="w-56 min-h-screen bg-white border-r border-slate-100 flex flex-col flex-shrink-0">
-
-      {/* ===========================
-          BOTÓN NUEVA CITA — arriba del todo
-          Es lo primero que ve el psicólogo al entrar
-          =========================== */}
       <div className="p-3 pt-4">
         <button
           onClick={onNuevaCita}
@@ -66,18 +71,17 @@ export default function Sidebar({ onNuevaCita }: SidebarProps) {
         </button>
       </div>
 
-      {/* Separador */}
       <div className="px-3 py-1">
         <div className="border-t border-slate-100"></div>
       </div>
 
-      {/* Navegación principal con íconos */}
       <nav className="flex-1 p-3 flex flex-col gap-1">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 pb-2">
           Menú
         </p>
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path
+          // Ajustamos para que Tareas se marque activo incluso si estamos dentro de una tarea específica
+          const isActive = location.pathname.startsWith(item.path);
           return (
             <button
               key={item.path}
@@ -100,7 +104,6 @@ export default function Sidebar({ onNuevaCita }: SidebarProps) {
           )
         })}
       </nav>
-
     </aside>
   )
 }

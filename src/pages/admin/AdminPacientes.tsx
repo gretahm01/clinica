@@ -1,3 +1,7 @@
+// ===========================
+// src/pages/admin/AdminPacientes.tsx
+// ===========================
+
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
@@ -9,7 +13,11 @@ export default function AdminPacientes() {
   const navigate = useNavigate()
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [psicologos, setPsicologos] = useState<Profesional[]>([])
+  
+  // Estados de filtros
   const [busqueda, setBusqueda] = useState("")
+  const [filtroPsicologo, setFiltroPsicologo] = useState<number | "">("") 
+
   const [cargando, setCargando] = useState(true)
   
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -39,6 +47,7 @@ export default function AdminPacientes() {
     
     setGuardando(true)
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res = await crearPacienteAdmin(form as any)
       if (res.success) {
         setModalAbierto(false)
@@ -54,10 +63,20 @@ export default function AdminPacientes() {
     }
   }
 
-  const filtrados = pacientes.filter(p => 
-    (p.nombre?.toLowerCase() || "").includes(busqueda.toLowerCase()) ||
-    (p.email?.toLowerCase() || "").includes(busqueda.toLowerCase())
-  )
+  // Lógica de filtrado doble (Corregido el problema de Número vs Texto)
+  const filtrados = pacientes.filter(p => {
+    const coincideTexto = (p.nombre?.toLowerCase() || "").includes(busqueda.toLowerCase()) ||
+                          (p.email?.toLowerCase() || "").includes(busqueda.toLowerCase())
+    
+    // Extraemos el ID y nos aseguramos de que sea un Número real para la comparación
+    // (A veces el backend usa profesionalId, a veces psicologoId, esto cubre ambos por si acaso)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const idPsicologoPaciente = Number(p.profesionalId || (p as any).psicologoId || 0);
+    
+    const coincidePsicologo = filtroPsicologo === "" || idPsicologoPaciente === filtroPsicologo;
+
+    return coincideTexto && coincidePsicologo
+  })
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -66,13 +85,26 @@ export default function AdminPacientes() {
         <SidebarAdmin />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
             <div>
               <h1 className="text-2xl font-bold text-dark">Pacientes</h1>
               <p className="text-slate-400 text-sm mt-0.5">Directorio general de pacientes</p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={filtroPsicologo}
+                onChange={e => setFiltroPsicologo(e.target.value === "" ? "" : Number(e.target.value))}
+                className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary outline-none text-dark font-medium"
+              >
+                <option value="">Todos los psicólogos</option>
+                {psicologos.map(psi => (
+                  <option key={psi.id} value={psi.id}>
+                    Ps. {psi.nombre} {psi.apellido}
+                  </option>
+                ))}
+              </select>
+
               <input
                 type="text"
                 value={busqueda}
@@ -93,7 +125,7 @@ export default function AdminPacientes() {
             <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>
           ) : filtrados.length === 0 ? (
             <div className="text-center py-20 bg-white border border-slate-100 rounded-2xl shadow-sm">
-              <p className="text-slate-400 font-medium">No hay pacientes registrados.</p>
+              <p className="text-slate-400 font-medium">No se encontraron pacientes con esos filtros.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -110,7 +142,6 @@ export default function AdminPacientes() {
                     </p>
                   </div>
                   
-                  {/* 👇 AQUÍ ESTÁ EL BOTÓN QUE FALTABA 👇 */}
                   <button 
                     onClick={() => navigate(`/admin/pacientes/${p.id}`)} 
                     className="text-xs text-emerald-600 font-bold hover:underline whitespace-nowrap"

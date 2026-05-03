@@ -168,6 +168,7 @@ export default function PerfilPaciente() {
   async function handleGuardarCita(datos: DatosCita) {
     try {
       const motivoConEtiqueta = "[Psicólogo] " + (datos.motivo || "Agendada desde perfil");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res = await crearCita({ 
         ...datos, 
         pacienteId: Number(pacienteId), 
@@ -233,6 +234,7 @@ export default function PerfilPaciente() {
     try {
       const res = await cancelarCita(citaSeleccionada.id)
       if (res.success) { 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setCitas(prev => prev.map(c => c.id === citaSeleccionada.id ? { ...c, estado: "cancelada" as any } : c)); 
         cerrarModalFeedback();
       } else {
@@ -251,6 +253,7 @@ export default function PerfilPaciente() {
     try {
       const res = await confirmarCita(citaSeleccionada.id)
       if (res.success) { 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setCitas(prev => prev.map(c => c.id === citaSeleccionada.id ? { ...c, estado: "confirmada" as any } : c)); 
         cerrarModalFeedback();
       }
@@ -290,6 +293,7 @@ export default function PerfilPaciente() {
       ])
       const res = await completarCita(citaSeleccionada.id)
       if (res.success) { 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setCitas(prev => prev.map(c => c.id === citaSeleccionada.id ? { ...c, estado: "completada" as any, feedback: textoFeedback, notes: misNotas } : c)); 
         setExitoFeedback(true) 
       }
@@ -345,15 +349,18 @@ export default function PerfilPaciente() {
     }
   }
 
+  // === AQUÍ ESTÁ LA CORRECCIÓN: AHORA ENVÍA EL ARCHIVO ===
   async function handleGuardarTarea(datos: DatosTarea) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res = await crearTarea({ 
         pacienteId: Number(pacienteId), 
         profesionalId: 0, 
         titulo: datos.titulo, 
         contenido: datos.contenido, 
         fechaLimite: datos.fechaLimite, 
-        estado: "pendiente" 
+        estado: "pendiente",
+        archivo: datos.archivo // <-- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
       } as any)
 
       if (res.success) { 
@@ -394,8 +401,6 @@ export default function PerfilPaciente() {
       </div>
     )
   }
-
-  const proximaCita = citas.find(c => c.estado === "confirmada" || c.estado === "pendiente");
 
   const totalCitas = citas.length;
   const citasCompletadas = citas.filter(c => c.estado === "completada").length;
@@ -948,8 +953,8 @@ export default function PerfilPaciente() {
 
       {/* AQUÍ ESTÁN LOS MODALES QUE FALTABAN */}
       <ModalNuevaCita 
-        isOpen={modalCitaAbierto} 
-        onClose={() => setModalCitaAbierto(false)} 
+        abierto={modalCitaAbierto} 
+        onCerrar={() => setModalCitaAbierto(false)} 
         onGuardar={handleGuardarCita}
         pacientes={paciente ? [paciente] : []}
       />

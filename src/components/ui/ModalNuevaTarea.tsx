@@ -1,3 +1,7 @@
+// ===========================
+// src/components/ui/ModalNuevaTarea.tsx
+// ===========================
+
 import { useState, useRef } from "react"
 
 // Forma de los datos que produce este modal al guardar
@@ -7,14 +11,18 @@ export interface DatosTarea {
   fechaLimite: string
   paraProximaCita: boolean
   archivo: File | null
+  pacienteId?: number // NUEVO: Para saber a quién se le asigna desde la vista general
 }
 
 interface ModalNuevaTareaProps {
   abierto: boolean
   onCerrar: () => void
   onGuardar: (datos: DatosTarea) => void
-  nombrePaciente: string
+  nombrePaciente?: string // AHORA ES OPCIONAL
   proximaCitaFecha?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pacientes?: any[] // NUEVO: Lista de pacientes para el dropdown
+  guardando?: boolean // NUEVO: Estado de carga
 }
 
 export default function ModalNuevaTarea({
@@ -23,8 +31,11 @@ export default function ModalNuevaTarea({
   onGuardar,
   nombrePaciente,
   proximaCitaFecha,
+  pacientes,
+  guardando = false
 }: ModalNuevaTareaProps) {
 
+  const [pacienteId, setPacienteId] = useState("") // NUEVO: Estado para el dropdown
   const [titulo, setTitulo] = useState("")
   const [contenido, setContenido] = useState("")
   const [fechaLimite, setFechaLimite] = useState("")
@@ -38,6 +49,7 @@ export default function ModalNuevaTarea({
 
   function handleGuardar() {
     // 1. Validaciones
+    if (pacientes && pacientes.length > 0 && !pacienteId) return setError("Por favor, selecciona un paciente")
     if (!titulo.trim()) return setError("El título es requerido")
     if (!contenido.trim()) return setError("Las instrucciones son requeridas")
     if (!paraProximaCita && !fechaLimite) {
@@ -50,10 +62,12 @@ export default function ModalNuevaTarea({
       contenido,
       fechaLimite: paraProximaCita ? (proximaCitaFecha || "") : fechaLimite,
       paraProximaCita,
-      archivo
+      archivo,
+      pacienteId: pacienteId ? Number(pacienteId) : undefined
     })
 
-    // 3. Limpiar y cerrar
+    // 3. Limpiar
+    setPacienteId("")
     setTitulo("")
     setContenido("")
     setFechaLimite("")
@@ -63,6 +77,7 @@ export default function ModalNuevaTarea({
   }
 
   function handleCerrar() {
+    setPacienteId("")
     setError("")
     onCerrar()
   }
@@ -80,7 +95,7 @@ export default function ModalNuevaTarea({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-bold text-dark flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -95,10 +110,28 @@ export default function ModalNuevaTarea({
           </button>
         </div>
 
-        {/* A quién se asigna */}
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5">
-          Asignando a <span className="text-primary">{nombrePaciente}</span>
-        </p>
+        {/* Lógica dinámica para la asignación */}
+        {pacientes && pacientes.length > 0 ? (
+          <div className="mb-4">
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+              Asignar a Paciente
+            </label>
+            <select
+              value={pacienteId}
+              onChange={(e) => { setPacienteId(e.target.value); setError(""); }}
+              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary transition-shadow bg-slate-50/50 font-medium"
+            >
+              <option value="">Selecciona un paciente...</option>
+              {pacientes.map((p) => (
+                <option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5">
+            Asignando a <span className="text-primary">{nombrePaciente}</span>
+          </p>
+        )}
 
         {/* Error */}
         {error && (
@@ -175,7 +208,7 @@ export default function ModalNuevaTarea({
               <input
                 type="date"
                 value={fechaLimite}
-                min={hoy} // <-- Evita que seleccionen días en el pasado
+                min={hoy}
                 onChange={(e) => setFechaLimite(e.target.value)}
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary transition-shadow bg-white"
               />
@@ -219,7 +252,7 @@ export default function ModalNuevaTarea({
             <input
               ref={inputArchivoRef}
               type="file"
-              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" // <-- Filtro de seguridad
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
               className="hidden"
               onChange={(e) => setArchivo(e.target.files?.[0] || null)}
             />
@@ -236,9 +269,10 @@ export default function ModalNuevaTarea({
           </button>
           <button
             onClick={handleGuardar}
-            className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl transition-colors font-bold text-sm shadow-sm"
+            disabled={guardando}
+            className="flex-1 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-3 rounded-xl transition-colors font-bold text-sm shadow-sm"
           >
-            Asignar Tarea
+            {guardando ? "Guardando..." : "Asignar Tarea"}
           </button>
         </div>
 

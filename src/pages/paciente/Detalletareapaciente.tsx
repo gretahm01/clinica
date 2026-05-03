@@ -6,7 +6,8 @@ import { useState, useEffect, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import type { Tarea } from "../../types"
 import NavbarPaciente from "../../components/layout/NavbarPaciente"
-import { getTarea, actualizarTarea } from "../../services/api"
+// CAMBIO IMPORTANTE: Importamos entregarTarea en lugar de actualizarTarea
+import { getTarea, entregarTarea } from "../../services/api"
 
 // Color del badge según el estado
 function colorEstado(estado: string | undefined) {
@@ -74,12 +75,8 @@ export default function DetalleTareaPaciente() {
     setError("")
     
     try {
-      // Por ahora actualizamos el estado a "entregada". 
-      // NOTA: Si en el futuro necesitas enviar el File (archivo), 
-      // requerirá usar FormData en la API. Por ahora simulamos la entrega de datos.
-      const res = await actualizarTarea(Number(tareaId), { 
-        estado: "entregada"
-      } as Partial<Tarea>)
+      // AHORA SÍ usamos la función correcta que envía el texto y el archivo por FormData
+      const res = await entregarTarea(Number(tareaId), textoEntrega, archivo)
 
       if (res.success) {
         // Actualizamos la vista localmente
@@ -170,9 +167,26 @@ export default function DetalleTareaPaciente() {
             </svg>
             Instrucciones
           </h3>
-          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium">
+          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line font-medium mb-4">
             {tarea.contenido ?? "No hay instrucciones adicionales."}
           </p>
+
+          {/* Mostrar material de apoyo del psicólogo si existe */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {(tarea as any).materialApoyo && (
+            <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 px-4 py-3 rounded-xl w-fit">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-blue-800">Tu psicólogo adjuntó un archivo</p>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <button onClick={() => window.open((tarea as any).materialApoyo, '_blank')} className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium">
+                  Hacer clic para descargar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* COMENTARIO DEL TERAPEUTA — solo si está revisada */}
