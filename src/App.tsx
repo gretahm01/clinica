@@ -22,7 +22,7 @@ import DetalleTarea    from "./pages/psicologo/DetalleTarea"
 import DashboardPaciente    from "./pages/paciente/DashboardPaciente"
 import DetalleCita          from "./pages/paciente/DetalleCita"
 import DetalleTareaPaciente from "./pages/paciente/Detalletareapaciente"
-import ListaTareasPaciente  from "./pages/paciente/ListaTareasPaciente" // <--- NUEVA IMPORTACIÓN
+import ListaTareasPaciente  from "./pages/paciente/ListaTareasPaciente"
 import PerfilPacientePage   from "./pages/paciente/PerfilPacientePage"
 import CalendarioPaciente   from "./pages/paciente/CalendarioPaciente"
 
@@ -32,10 +32,11 @@ import PacientesSecretaria  from "./pages/secretaria/PacienteSecretaria"
 import CalendarioSecretaria from "./pages/secretaria/CalendarioSecretaria"
 
 // ===== PÁGINAS DEL ADMIN =====
-import AdminDashboard     from "./pages/admin/AdminDashboard"
-import AdminPatientsPage  from "./pages/admin/AdminPatientsPage"
-import AdminStaffPage     from "./pages/admin/AdminStaffPage"
-import AdminSettingsPage from "./pages/admin/AdminSettingsPage"
+import AdminDashboard       from "./pages/admin/AdminDashboard"
+import AdminPacientes       from "./pages/admin/AdminPacientes"
+import AdminPsicologos      from "./pages/admin/AdminPsicologos"
+import AdminPerfilPsicologo from "./pages/admin/AdminPerfilPsicologo"
+import DetallePacienteAdmin from "./pages/admin/DetallePacienteAdmin"
 
 // ===========================
 // RUTA PROTEGIDA
@@ -118,12 +119,9 @@ export default function App() {
       <Route path="/paciente/citas/:citaId"
         element={<RutaProtegida rolesPermitidos={["paciente"]}><DetalleCita /></RutaProtegida>}
       />
-      
-      {/* ---> NUEVA RUTA: LISTA DE TAREAS <--- */}
       <Route path="/paciente/tareas"
         element={<RutaProtegida rolesPermitidos={["paciente"]}><ListaTareasPaciente /></RutaProtegida>}
       />
-      
       <Route path="/paciente/tareas/:tareaId"
         element={<RutaProtegida rolesPermitidos={["paciente"]}><DetalleTareaPaciente /></RutaProtegida>}
       />
@@ -139,17 +137,19 @@ export default function App() {
         element={<RutaProtegida rolesPermitidos={["admin"]}><AdminDashboard /></RutaProtegida>}
       />
       <Route path="/admin/pacientes"
-        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminPatientsPage /></RutaProtegida>}
+        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminPacientes /></RutaProtegida>}
       />
-      <Route path="/admin/staff"
-        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminStaffPage /></RutaProtegida>}
+      <Route path="/admin/psicologos"
+        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminPsicologos /></RutaProtegida>}
+      />
+      <Route path="/admin/psicologos/:id"
+        element={<RutaProtegida rolesPermitidos={["admin"]}><AdminPerfilPsicologo /></RutaProtegida>}
+      />
+      <Route path="/admin/pacientes/:id"
+        element={<RutaProtegida rolesPermitidos={["admin"]}><DetallePacienteAdmin /></RutaProtegida>}
       />
 
-      // En la sección de {/* ===== RUTAS DEL ADMIN ===== */}
-<Route path="/admin/configuracion"
-  element={<RutaProtegida rolesPermitidos={["admin"]}><AdminSettingsPage /></RutaProtegida>}
-/>
-
+      {/* Ruta por defecto en caso de que escriban algo raro */}
       <Route path="*" element={<Navigate to="/" replace />} />
 
     </Routes>

@@ -12,7 +12,7 @@ import NavbarPaciente from "../../components/layout/NavbarPaciente"
 import SidebarPaciente from "../../components/layout/SidebarPaciente"
 import ModalSolicitarCita from "../../components/ui/ModalSolicitarCita"
 import { useAuth } from "../../hooks/useAuth"
-import { getCitasPorPaciente, confirmarCita, cancelarCita, reagendarCita, getNotificaciones, marcarNotificacionesLeidas } from "../../services/api"
+import { getCitasPorPaciente, confirmarCita, cancelarCita, reagendarCita, crearCita } from "../../services/api"
 import type { Cita } from "../../types"
 
 // ===========================
@@ -23,6 +23,7 @@ function colorEstadoCalendario(estado: string) {
     case 'confirmada': return '#34d399';
     case 'pendiente': return '#fb923c';
     case 'reagendada': return '#f87171';
+    case 'completada': return '#60a5fa'; // Azul para completadas
     default: return '#94a3b8';
   }
 }
@@ -32,6 +33,7 @@ function colorEstadoCita(estado: string) {
     case 'confirmada': return 'bg-emerald-100 text-emerald-600';
     case 'pendiente': return 'bg-orange-100 text-orange-600';
     case 'reagendada': return 'bg-red-100 text-red-600';
+    case 'completada': return 'bg-blue-100 text-blue-600'; // Azul para completadas
     default: return 'bg-slate-100 text-slate-500';
   }
 }
@@ -41,6 +43,7 @@ function etiquetaEstadoCita(estado: string) {
     case 'confirmada': return 'Confirmada';
     case 'pendiente': return 'En Revisión';
     case 'reagendada': return 'Reagendada / Propuesta';
+    case 'completada': return 'Completada';
     default: return estado;
   }
 }
@@ -60,42 +63,6 @@ function esPasada(fechaStr: string) {
   return fechaCita < hoy;
 }
 
-function iconoNotificacion(tipo: string) {
-  switch (tipo) {
-    case "nueva_tarea":
-      return (
-        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-          </svg>
-        </div>
-      )
-    default:
-      return (
-        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
-          </svg>
-        </div>
-      )
-  }
-}
-
-function calcularTiempo(fechaStr: string) {
-  if (!fechaStr) return "Hace un momento";
-  const fecha = new Date(fechaStr);
-  const ahora = new Date();
-  const segundos = Math.floor((ahora.getTime() - fecha.getTime()) / 1000);
-  if (segundos < 60) return "Hace un momento";
-  const minutos = Math.floor(segundos / 60);
-  if (minutos < 60) return `Hace ${minutos} min`;
-  const horas = Math.floor(minutos / 60);
-  if (horas < 24) return `Hace ${horas} horas`;
-  const dias = Math.floor(horas / 24);
-  if (dias === 1) return "Ayer";
-  return `Hace ${dias} días`;
-}
-
 function obtenerMotivoLimpio(motivo: string) {
   if (!motivo) return "";
   return motivo.replace("[Paciente] ", "").replace("[Psicólogo] ", "");
@@ -110,8 +77,6 @@ export default function CalendarioPaciente() {
   const [citasCrudas, setCitasCrudas] = useState<Cita[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [eventos, setEventos] = useState<any[]>([])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [notificaciones, setNotificaciones] = useState<any[]>([])
   const [proximaCita, setProximaCita] = useState<Cita | null>(null)
 
   const [modalNuevaCitaAbierto, setModalNuevaCitaAbierto] = useState(false)
@@ -137,12 +102,12 @@ export default function CalendarioPaciente() {
   }, [usuario])
 
   async function cargarDatos() {
-    if (!usuario?.pacienteId) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const idCorrecto = (usuario as any)?.pacienteId || (usuario as any)?.id || usuario?.userId;
+    if (!idCorrecto) return;
+
     try {
-      const [resCitas, resNotif] = await Promise.all([
-        getCitasPorPaciente(Number(usuario.pacienteId)),
-        getNotificaciones()
-      ])
+      const resCitas = await getCitasPorPaciente(Number(idCorrecto));
       
       if (resCitas.success) {
         setCitasCrudas(resCitas.data);
@@ -160,18 +125,9 @@ export default function CalendarioPaciente() {
         const futuras = resCitas.data.filter((c: Cita) => !esPasada(c.fecha) && c.estado !== 'cancelada' && c.estado !== 'completada').sort((a: Cita, b: Cita) => a.fecha.localeCompare(b.fecha));
         setProximaCita(futuras.find((c: Cita) => c.estado === "confirmada") ?? futuras[0] ?? null);
       }
-      
-      if (resNotif.success) {
-        setNotificaciones(resNotif.data);
-      }
     } catch (error) { 
       console.error(error); 
     }
-  }
-
-  async function handleMarcarLeidas() {
-    await marcarNotificacionesLeidas();
-    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
   }
 
   async function handleConfirmar(id: number) {
@@ -226,10 +182,9 @@ export default function CalendarioPaciente() {
     }
   }
 
-  const noLeidas = notificaciones.filter(n => !n.leida).length;
-
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    // FIX DE ALTURA: h-screen y overflow-hidden
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <NavbarPaciente />
       
       <div className="flex flex-1 overflow-hidden">
@@ -262,6 +217,10 @@ export default function CalendarioPaciente() {
                   <span className="w-3 h-3 rounded-full bg-[#f87171] inline-block shadow-sm"></span> 
                   Reagendada
                 </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-[#60a5fa] inline-block shadow-sm"></span> 
+                  Completada
+                </span>
               </div>
             </div>
 
@@ -281,44 +240,6 @@ export default function CalendarioPaciente() {
             />
           </div>
         </main>
-
-        <aside className="w-72 min-h-screen bg-white border-l border-slate-100 flex flex-col flex-shrink-0 overflow-y-auto hidden lg:flex">
-          <div className="p-4 border-b border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-dark">Notificaciones</h3>
-                {noLeidas > 0 && (
-                  <span className="w-5 h-5 bg-rose-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                    {noLeidas}
-                  </span>
-                )}
-              </div>
-              {noLeidas > 0 && (
-                <button onClick={handleMarcarLeidas} className="text-xs text-primary hover:text-primary-hover font-medium transition-colors">
-                  Marcar Leídas
-                </button>
-              )}
-            </div>
-            
-            <div className="flex flex-col gap-2">
-              {notificaciones.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">No tienes notificaciones</p>
-              ) : (
-                notificaciones.map((notif) => (
-                  <div key={notif.id} className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${notif.leida ? "opacity-50" : "bg-slate-50"}`}>
-                    {iconoNotificacion(notif.tipo)}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-dark font-medium leading-snug">{notif.mensaje}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{calcularTiempo(notif.fecha)}</p>
-                    </div>
-                    {!notif.leida && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </aside>
-
       </div>
 
       {/* MODAL DETALLES DE CITA */}
@@ -479,15 +400,18 @@ export default function CalendarioPaciente() {
           setProcesando(true);
           try {
             const motivoConEtiqueta = "[Paciente] " + (datos.motivo || "Solicito espacio");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const idCorrecto = (usuario as any)?.pacienteId || (usuario as any)?.id || usuario?.userId;
             
             const res = await crearCita({ 
-              pacienteId: Number(usuario?.pacienteId), 
+              pacienteId: Number(idCorrecto), 
               profesionalId: 1, 
               fecha: datos.fecha, 
               hora: datos.hora, 
               estado: "pendiente", 
               duracion: 60, 
               motivo: motivoConEtiqueta 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any);
             
             if (res.success) { 

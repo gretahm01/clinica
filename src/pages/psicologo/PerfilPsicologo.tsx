@@ -25,16 +25,6 @@ interface PsicologoPerfil {
   bio: string
 }
 
-const HORARIO = [
-  { dia: "Lunes",     horas: "10:00 – 19:00" },
-  { dia: "Martes",    horas: "10:00 – 19:00" },
-  { dia: "Miércoles", horas: "10:00 – 19:00" },
-  { dia: "Jueves",    horas: "10:00 – 19:00" },
-  { dia: "Viernes",   horas: "10:00 – 19:00" },
-  { dia: "Sábado",    horas: "No disponible" },
-  { dia: "Domingo",   horas: "No disponible" },
-]
-
 function calcularEdad(fechaNacimiento: string): number {
   const hoy = new Date()
   const nac = new Date(fechaNacimiento)
@@ -325,7 +315,7 @@ export default function PerfilPsicologo() {
             </div>
           )}
 
-          {/* CUADRÍCULA PRINCIPAL (Absorbe el espacio restante) */}
+          {/* CUADRÍCULA PRINCIPAL */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 min-h-0 pb-4 lg:pb-0 overflow-y-auto lg:overflow-visible items-stretch">
             
             {/* COLUMNA 1: Tarjeta Principal de Identidad */}
@@ -414,33 +404,11 @@ export default function PerfilPsicologo() {
               </Seccion>
             </div>
 
-            {/* FILA INFERIOR: Horario de Atención (Ocupa las 3 columnas o 2 dependiendo) */}
-            <div className="md:col-span-2 lg:col-span-3">
-              <Seccion titulo="Horario de atención" color="bg-violet-100" iconColor="text-violet-500"
-                accion={<span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-bold uppercase tracking-widest">Solo lectura</span>}
-                icono={<svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-              >
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-                  {HORARIO.map((item) => (
-                    <div key={item.dia} className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-dark mb-1">{item.dia}</p>
-                      <div className="flex items-center justify-center gap-1">
-                        <div className={`w-1.5 h-1.5 rounded-full ${item.horas === "No disponible" ? "bg-slate-300" : "bg-emerald-400"}`} />
-                        <span className={`text-[10px] font-bold ${item.horas === "No disponible" ? "text-slate-400" : "text-emerald-600"}`}>
-                          {item.horas === "No disponible" ? "Cerrado" : item.horas}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Seccion>
-            </div>
-
           </div>
         </main>
       </div>
 
-      {/* Modal cambiar contraseña (Intacto) */}
+      {/* Modal cambiar contraseña */}
       {modalContrasena && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4" onClick={cerrarModalContrasena}>
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>

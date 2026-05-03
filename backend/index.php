@@ -35,25 +35,28 @@ switch ($modulo) {
         break;
         
     case 'citas':
-    require __DIR__ . '/routes/citas.php';
-    break;
+        require __DIR__ . '/routes/citas.php';
+        break;
 
     case 'profesional':
-    require __DIR__ . '/routes/profesional.php';
-    break;
+        require __DIR__ . '/routes/profesional.php';
+        break;
+
     case 'expediente':
-    require __DIR__ . '/routes/expediente.php';
-    break;
+        require __DIR__ . '/routes/expediente.php';
+        break;
+
     case 'tareas':
-    require __DIR__ . '/routes/tareas.php';
-    break;
+        require __DIR__ . '/routes/tareas.php';
+        break;
 
     case 'notificaciones':
         require __DIR__ . '/routes/notificaciones.php';
         break;
 
-    case 'expediente':
-        require __DIR__ . '/routes/expediente.php';
+    // === ¡AQUÍ ESTÁ LA MAGIA PARA EL ADMINISTRADOR! ===
+    case 'admin':
+        require __DIR__ . '/routes/admin.php';
         break;
 
     default:

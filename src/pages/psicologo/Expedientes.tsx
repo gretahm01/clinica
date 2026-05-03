@@ -1,7 +1,3 @@
-// ===========================
-// src/pages/psicologo/Expedientes.tsx
-// ===========================
-
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import Navbar from "../../components/layout/Navbar"
@@ -27,11 +23,11 @@ const CAMPOS: { key: CampoTexto; label: string }[] = [
 function formDesde(exp: ExpedienteClinico): FormData {
   return {
     motivoConsulta:        exp.motivoConsulta        ?? "",
-    condicionActual:       exp.condicionActual        ?? "",
-    infanciaAdolescencia:  exp.infanciaAdolescencia   ?? "",
-    eventosSignificativos: exp.eventosSignificativos  ?? "",
-    historialAbuso:        exp.historialAbuso         ?? "",
-    metasTerapeuticas:     exp.metasTerapeuticas      ?? "",
+    condicionActual:       exp.condicionActual       ?? "",
+    infanciaAdolescencia:  exp.infanciaAdolescencia  ?? "",
+    eventosSignificativos: exp.eventosSignificativos ?? "",
+    historialAbuso:        exp.historialAbuso        ?? "",
+    metasTerapeuticas:     exp.metasTerapeuticas     ?? "",
   }
 }
 
@@ -60,6 +56,7 @@ export default function Expedientes() {
   useEffect(() => {
     if (!pacienteId) return
     cargar()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pacienteId])
 
   async function cargar() {
@@ -115,8 +112,12 @@ export default function Expedientes() {
       } else {
         alert(res.message ?? "Error al guardar")
       }
-    } catch {
-      alert("Error de conexión al guardar")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      // AQUÍ ESTÁ EL ATRAPA ERRORES NUEVO
+      const mensajeBackend = err.response?.data?.message || "Error de conexión al guardar";
+      alert(mensajeBackend);
+      console.error("Detalle del error:", err.response?.data);
     } finally {
       setGuardando(false)
     }
@@ -170,7 +171,7 @@ export default function Expedientes() {
           ← Volver al perfil del paciente
         </button>
 
-        {/* Header (De Greta) */}
+        {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -248,7 +249,6 @@ export default function Expedientes() {
                       className={`flex items-start gap-3 p-2.5 rounded-xl transition-colors ${
                         editando ? "cursor-pointer hover:bg-slate-50 border border-transparent hover:border-slate-100" : "cursor-default"
                       } ${!editando && !selectedDx.has(dx.id) ? "hidden" : ""}`} 
-                      // Si no está editando, oculta los que no están seleccionados para una vista más limpia
                     >
                       <input
                         type="checkbox"
@@ -275,7 +275,7 @@ export default function Expedientes() {
           {/* Columna derecha — campos clínicos y NOTAS DE SESIÓN */}
           <div className="lg:col-span-2 flex flex-col gap-5">
             
-            {/* Secciones Clínicas (De Greta) */}
+            {/* Secciones Clínicas */}
             {CAMPOS.map(({ key, label }) => (
               <div key={key} className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
                 <h3 className="font-bold text-dark mb-3">{label}</h3>
@@ -295,7 +295,7 @@ export default function Expedientes() {
               </div>
             ))}
 
-            {/* NOTAS DE SESIÓN (De Tu Versión - HEAD) */}
+            {/* NOTAS DE SESIÓN */}
             <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100 mt-2">
               <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
                 <div>

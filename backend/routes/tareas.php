@@ -3,8 +3,14 @@ require_once __DIR__ . '/../config/headers.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../middleware/auth.php';
 
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
 $usuario = verificarToken();
-verificarRol($usuario, ['psicologo']);
+verificarRol($usuario, ['psicologo', 'paciente']);
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -16,193 +22,181 @@ $partes = explode('/', $ruta);
 $subPath = $partes[0] ?? '';
 $subId   = isset($partes[1]) && is_numeric($partes[1]) ? (int)$partes[1] : null;
 
-// ===========================
-// GET /tareas/paciente/:id — tareas de un paciente
-// ===========================
-if ($method === 'GET' && $subPath === 'paciente' && $subId !== null) {
+$conn = conectarDB();
 
-    $conn = conectarDB();
+$esPsicologo = ($usuario['rol'] === 'psicologo');
+$profId = 0;
 
-    $stmt = $conn->prepare("
-        SELECT
-            t.task_id           AS id,
-            t.patient_id        AS pacienteId,
-            t.professional_id   AS profesionalId,
-            t.title             AS titulo,
-            t.content           AS contenido,
-            t.due_date          AS fechaLimite,
-            t.status            AS estado,
-            t.created_at        AS fechaCreacion,
-            t.delivered_at      AS fechaEntrega,
-            t.therapist_comment AS comentarioTerapeuta
-        FROM task t
-        WHERE t.patient_id = ?
-        ORDER BY t.created_at DESC
-    ");
-    $stmt->bind_param("i", $subId);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
-
-    $tareas = [];
-    while ($fila = $resultado->fetch_assoc()) {
-        $tareas[] = $fila;
-    }
-
-    http_response_code(200);
-    echo json_encode(["success" => true, "data" => $tareas]);
-
-    $stmt->close();
-    $conn->close();
-    exit();
-}
-
-// ===========================
-// POST /tareas — crear nueva tarea
-// ===========================
-if ($method === 'POST') {
-
-    $body = json_decode(file_get_contents("php://input"), true);
-
-    $pacienteId  = intval($body['pacienteId']  ?? 0);
-    $titulo      = trim($body['titulo']        ?? '');
-    $contenido   = trim($body['contenido']     ?? '');
-    $fechaLimite = trim($body['fechaLimite']   ?? '');
-
-    if (!$pacienteId || !$titulo || !$contenido) {
-        http_response_code(400);
-        echo json_encode(["success" => false, "message" => "Paciente, título y contenido son requeridos"]);
-        exit();
-    }
-
-    $conn = conectarDB();
-
-    // Obtener professional_id del psicólogo logueado
+if ($esPsicologo) {
     $stmtProf = $conn->prepare("SELECT professional_id FROM professional WHERE user_id = ?");
     $stmtProf->bind_param("i", $usuario['userId']);
     $stmtProf->execute();
-    $resProf = $stmtProf->get_result()->fetch_assoc();
+    $profResult = $stmtProf->get_result()->fetch_assoc();
+    if ($profResult) {
+        $profId = $profResult['professional_id'];
+    }
     $stmtProf->close();
-
-    if (!$resProf) {
-        http_response_code(404);
-        echo json_encode(["success" => false, "message" => "Profesional no encontrado"]);
-        exit();
-    }
-
-    $profesionalId = $resProf['professional_id'];
-    $status = 'pendiente';
-    $fechaLimiteVal = $fechaLimite ?: null;
-
-    $stmt = $conn->prepare("
-        INSERT INTO task (patient_id, professional_id, title, content, due_date, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
-    ");
-    $stmt->bind_param("iissss", $pacienteId, $profesionalId, $titulo, $contenido, $fechaLimiteVal, $status);
-    $stmt->execute();
-    $newId = $conn->insert_id;
-    $stmt->close();
-
-    http_response_code(201);
-    echo json_encode([
-        "success" => true,
-        "message" => "Tarea creada correctamente",
-        "data" => [
-            "id"          => $newId,
-            "pacienteId"  => $pacienteId,
-            "titulo"      => $titulo,
-            "contenido"   => $contenido,
-            "fechaLimite" => $fechaLimiteVal,
-            "estado"      => $status,
-        ]
-    ]);
-
-    $conn->close();
-    exit();
 }
 
-// ===========================
-// GET /tareas/:id — detalle de una tarea
-// ===========================
-if ($method === 'GET' && is_numeric($subPath)) {
-    $tareaId = (int)$subPath;
-    $conn = conectarDB();
-
-    $stmt = $conn->prepare("
-        SELECT task_id AS id, patient_id AS pacienteId, professional_id AS profesionalId,
-               title AS titulo, content AS contenido, due_date AS fechaLimite,
-               status AS estado, image_path AS imagePath,
-               therapist_comment AS comentarioTerapeuta,
-               created_at AS fechaCreacion, delivered_at AS fechaEntrega
-        FROM task WHERE task_id = ?
-    ");
-    $stmt->bind_param("i", $tareaId);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
-
-    if ($resultado->num_rows === 0) {
-        http_response_code(404);
-        echo json_encode(["success" => false, "message" => "Tarea no encontrada"]);
-        exit();
+function pacienteEsMio($conn, $pacienteIdBusqueda, $profId, $usuario) {
+    if ($usuario['rol'] === 'psicologo') {
+        $stmt = $conn->prepare("SELECT 1 FROM patient WHERE patient_id = ? AND professional_id = ?");
+        $stmt->bind_param("ii", $pacienteIdBusqueda, $profId);
+        $stmt->execute();
+        $esSuyo = $stmt->get_result()->num_rows > 0;
+        $stmt->close();
+        return $esSuyo;
+    } elseif ($usuario['rol'] === 'paciente') {
+        $stmt = $conn->prepare("SELECT patient_id FROM patient WHERE user_id = ?");
+        $stmt->bind_param("i", $usuario['userId']);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return ($res && $res['patient_id'] == $pacienteIdBusqueda);
     }
-
-    http_response_code(200);
-    echo json_encode(["success" => true, "data" => $resultado->fetch_assoc()]);
-    $stmt->close();
-    $conn->close();
-    exit();
+    return true; 
 }
 
-// ===========================
-// PUT /tareas/:id — actualizar tarea
-// ===========================
-if ($method === 'PUT' && is_numeric($subPath)) {
-    $tareaId = (int)$subPath;
-    $body    = json_decode(file_get_contents("php://input"), true);
-
-    $estado              = $body['estado']              ?? null;
-    $comentarioTerapeuta = $body['comentarioTerapeuta'] ?? null;
-
-    $conn = conectarDB();
-
-    $stmt = $conn->prepare("
-        UPDATE task SET
-            status = COALESCE(?, status),
-            therapist_comment = COALESCE(?, therapist_comment)
-        WHERE task_id = ?
-    ");
-    $stmt->bind_param("ssi", $estado, $comentarioTerapeuta, $tareaId);
-    $stmt->execute();
-
-    http_response_code(200);
-    echo json_encode(["success" => true, "message" => "Tarea actualizada"]);
-    $stmt->close();
-    $conn->close();
-    exit();
+function tareaEsMia($conn, $tareaId, $profId, $usuario) {
+    if ($usuario['rol'] === 'psicologo') {
+        $stmt = $conn->prepare("SELECT 1 FROM task WHERE task_id = ? AND professional_id = ?");
+        $stmt->bind_param("ii", $tareaId, $profId);
+        $stmt->execute();
+        $esSuyo = $stmt->get_result()->num_rows > 0;
+        $stmt->close();
+        return $esSuyo;
+    } elseif ($usuario['rol'] === 'paciente') {
+        $stmt = $conn->prepare("SELECT 1 FROM task t JOIN patient p ON t.patient_id = p.patient_id WHERE t.task_id = ? AND p.user_id = ?");
+        $stmt->bind_param("ii", $tareaId, $usuario['userId']);
+        $stmt->execute();
+        $esSuyo = $stmt->get_result()->num_rows > 0;
+        $stmt->close();
+        return $esSuyo;
+    }
+    return true;
 }
 
-// ===========================
-// DELETE /tareas/:id — Eliminar una tarea
-// ===========================
-if ($method === 'DELETE' && is_numeric($subPath)) {
-    $tareaId = (int)$subPath;
-    $conn = conectarDB();
-
-    $stmt = $conn->prepare("DELETE FROM task WHERE task_id = ?");
-    $stmt->bind_param("i", $tareaId);
-    $stmt->execute();
-
-    if ($stmt->affected_rows > 0) {
-        http_response_code(200);
-        echo json_encode(["success" => true, "message" => "Tarea eliminada"]);
-    } else {
-        http_response_code(404);
-        echo json_encode(["success" => false, "message" => "No se encontró la tarea"]);
+try {
+    if ($method === 'GET' && empty($subPath)) {
+        if (!$profId) {
+            http_response_code(404); echo json_encode(["success" => false, "message" => "Profesional no encontrado"]); exit();
+        }
+        $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, professional_id AS profesionalId, title AS titulo, content AS contenido, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, created_at AS fechaCreacion, delivered_at AS fechaEntrega, therapist_comment AS comentarioTerapeuta FROM task WHERE professional_id = ? ORDER BY created_at DESC");
+        $stmt->bind_param("i", $profId);
+        $stmt->execute();
+        $resultado = $stmt->get_result();
+        $tareas = [];
+        while ($fila = $resultado->fetch_assoc()) { $tareas[] = $fila; }
+        http_response_code(200); echo json_encode(["success" => true, "data" => $tareas]);
+        $stmt->close(); $conn->close(); exit();
     }
 
-    $stmt->close();
-    $conn->close();
+    if ($method === 'GET' && $subPath === 'paciente' && $subId !== null) {
+        if (!pacienteEsMio($conn, $subId, $profId, $usuario)) {
+            http_response_code(403); echo json_encode(["success" => false, "message" => "Acceso denegado a este paciente"]); exit();
+        }
+        $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, professional_id AS profesionalId, title AS titulo, content AS contenido, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, created_at AS fechaCreacion, delivered_at AS fechaEntrega, therapist_comment AS comentarioTerapeuta FROM task WHERE patient_id = ? ORDER BY created_at DESC");
+        $stmt->bind_param("i", $subId);
+        $stmt->execute();
+        $resultado = $stmt->get_result();
+        $tareas = [];
+        while ($fila = $resultado->fetch_assoc()) { $tareas[] = $fila; }
+        http_response_code(200); echo json_encode(["success" => true, "data" => $tareas]);
+        $stmt->close(); $conn->close(); exit();
+    }
+
+    if ($method === 'POST' && empty($subPath)) {
+        $body = json_decode(file_get_contents("php://input"), true);
+        $pacienteId  = intval($body['pacienteId']  ?? 0);
+        $titulo      = trim($body['titulo']        ?? '');
+        $contenido   = trim($body['contenido']     ?? '');
+        $fechaLimite = trim($body['fechaLimite']   ?? '');
+
+        if (!$pacienteId || !$titulo || !$contenido) {
+            http_response_code(400); echo json_encode(["success" => false, "message" => "Faltan datos"]); exit();
+        }
+        if (!pacienteEsMio($conn, $pacienteId, $profId, $usuario)) {
+            http_response_code(403); echo json_encode(["success" => false, "message" => "Acceso denegado a este paciente"]); exit();
+        }
+        $status = 'pendiente';
+        $fechaLimiteVal = $fechaLimite ?: null;
+        $stmt = $conn->prepare("INSERT INTO task (patient_id, professional_id, title, content, due_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+        $stmt->bind_param("iissss", $pacienteId, $profId, $titulo, $contenido, $fechaLimiteVal, $status);
+        $stmt->execute();
+        $newId = $conn->insert_id;
+        $stmt->close();
+        http_response_code(201); echo json_encode(["success" => true, "data" => ["id" => $newId, "titulo" => $titulo]]);
+        $conn->close(); exit();
+    }
+
+    if (is_numeric($subPath)) {
+        $tareaId = (int)$subPath;
+        if (!tareaEsMia($conn, $tareaId, $profId, $usuario)) {
+            http_response_code(403); echo json_encode(["success" => false, "message" => "Acceso denegado a esta tarea"]); exit();
+        }
+        
+        if ($method === 'POST' && isset($partes[1]) && $partes[1] === 'entregar') {
+            $texto = $_POST['texto'] ?? '';
+            $dbFilePath = null;
+
+            if (isset($_FILES['archivo']) && $_FILES['archivo']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = __DIR__ . '/../uploads/tareas/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                
+                $fileName = time() . '_' . preg_replace("/[^a-zA-Z0-9.-]/", "_", $_FILES['archivo']['name']);
+                $targetFilePath = $uploadDir . $fileName;
+                
+                if (move_uploaded_file($_FILES['archivo']['tmp_name'], $targetFilePath)) {
+                    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
+                    $host = $_SERVER['HTTP_HOST'];
+                    // CORREGIDO: Ruta con /clinica/ en lugar de /medtrack/
+                    $dbFilePath = $protocol . "://" . $host . "/clinica/backend/uploads/tareas/" . $fileName;
+                }
+            }
+
+            $stmt = $conn->prepare("UPDATE task SET status = 'entregada', patient_response = ?, file_path = ?, delivered_at = NOW() WHERE task_id = ?");
+            $stmt->bind_param("ssi", $texto, $dbFilePath, $tareaId);
+            $stmt->execute();
+            echo json_encode(["success" => true, "message" => "Tarea entregada con éxito"]);
+            $stmt->close();
+            $conn->close(); exit();
+        }
+
+        if ($method === 'GET') {
+            $stmt = $conn->prepare("SELECT task_id AS id, patient_id AS pacienteId, title AS titulo, content AS contenido, patient_response AS respuestaPaciente, file_path AS imagePath, due_date AS fechaLimite, status AS estado, therapist_comment AS comentarioTerapeuta FROM task WHERE task_id = ?");
+            $stmt->bind_param("i", $tareaId);
+            $stmt->execute();
+            $resultado = $stmt->get_result();
+            echo json_encode(["success" => true, "data" => $resultado->fetch_assoc()]);
+            $stmt->close();
+        } elseif ($method === 'PUT') {
+            $body = json_decode(file_get_contents("php://input"), true);
+            $estado = $body['estado'] ?? null;
+            $comentarioTerapeuta = $body['comentarioTerapeuta'] ?? null;
+            $stmt = $conn->prepare("UPDATE task SET status = COALESCE(?, status), therapist_comment = COALESCE(?, therapist_comment) WHERE task_id = ?");
+            $stmt->bind_param("ssi", $estado, $comentarioTerapeuta, $tareaId);
+            $stmt->execute();
+            echo json_encode(["success" => true, "message" => "Tarea actualizada"]);
+            $stmt->close();
+        } elseif ($method === 'DELETE') {
+            $stmt = $conn->prepare("DELETE FROM task WHERE task_id = ?");
+            $stmt->bind_param("i", $tareaId);
+            $stmt->execute();
+            echo json_encode(["success" => true, "message" => "Tarea eliminada"]);
+            $stmt->close();
+        }
+        $conn->close(); exit();
+    }
+
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(["success" => false, "message" => $e->getMessage()]);
+    if (isset($conn) && $conn) { $conn->close(); }
     exit();
 }
 
 http_response_code(405);
 echo json_encode(["success" => false, "message" => "Metodo no permitido"]);
+$conn->close();

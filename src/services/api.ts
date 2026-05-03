@@ -165,12 +165,6 @@ export async function guardarFeedbackCita(id: number, feedback: string) {
   return response.data
 }
 
-// Respaldo de la función de Greta por si se usa en otro componente
-export async function guardarFeedback(citaId: number, feedback: string) {
-  const response = await api.put<ApiResponse<null>>(`/citas/${citaId}/feedback`, { feedback })
-  return response.data
-}
-
 export async function guardarNotasCita(id: number, notes: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await api.put<ApiResponse<any>>(`/citas/${id}/notes`, { 
@@ -205,14 +199,32 @@ export async function actualizarTarea(id: number, datos: Partial<Tarea>) {
   return response.data
 }
 
-export async function getTareasPaciente(pacienteId: number) {
-  const response = await api.get<ApiResponse<Tarea[]>>(`/tareas/paciente/${pacienteId}`)
-  return response.data
-}
-
 export async function eliminarTarea(id: number) {
   const response = await api.delete<ApiResponse<null>>(`/tareas/${id}`)
   return response.data
+}
+
+export async function getTodasLasTareas() {
+  const response = await api.get<ApiResponse<Tarea[]>>("/tareas")
+  return response.data
+}
+
+// Entregar tarea con texto y archivo adjunto (Usando Axios)
+export async function entregarTarea(tareaId: number, texto: string, archivo: File | null) {
+  const formData = new FormData();
+  formData.append("texto", texto);
+  if (archivo) {
+    formData.append("archivo", archivo);
+  }
+
+  // Usamos api.post para que se agregue el token automáticamente.
+  // Axios detecta el FormData y cambia el Content-Type automáticamente.
+  const response = await api.post<ApiResponse<null>>(`/tareas/${tareaId}/entregar`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
 }
 
 
@@ -304,3 +316,58 @@ export const marcarNotificacionesLeidas = async () => {
   const res = await api.put('/notificaciones');
   return res.data;
 };
+
+
+// ===========================
+// RUTAS DE ADMINISTRADOR
+// ===========================
+
+export async function getAdminDashboardStats() {
+  const response = await api.get<ApiResponse<{ totalPsicologos: number, totalPacientes: number }>>("/admin/stats")
+  return response.data
+}
+
+export async function getTodosPsicologos() {
+  const response = await api.get<ApiResponse<Profesional[]>>("/admin/psicologos")
+  return response.data
+}
+
+export async function crearPsicologo(datos: Omit<Profesional, "id">) {
+  // La contraseña "password123" se asignará en el backend de PHP por seguridad
+  const response = await api.post<ApiResponse<Profesional>>("/admin/psicologos", datos)
+  return response.data
+}
+
+export async function getTodosPacientesAdmin() {
+  const response = await api.get<ApiResponse<Paciente[]>>("/admin/pacientes")
+  return response.data
+}
+
+// Nota: crearPacienteAdmin recibe el id del psicólogo asignado
+export async function crearPacienteAdmin(datos: Omit<Paciente, "id"> & { psicologoId: number }) {
+  const response = await api.post<ApiResponse<Paciente>>("/admin/pacientes", datos)
+  return response.data
+}
+
+export async function getPerfilPsicologoAdmin(id: number) {
+  const response = await api.get<ApiResponse<{
+    profesional: Profesional;
+    pacientes: Paciente[];
+  }>>(`/admin/psicologos/${id}`)
+  return response.data
+}
+
+export async function actualizarPsicologoAdmin(id: number, datos: Partial<Profesional>) {
+  const response = await api.put<ApiResponse<Profesional>>(`/admin/psicologos/${id}`, datos)
+  return response.data
+}
+
+export async function getPerfilPacienteAdmin(id: number) {
+  const response = await api.get<ApiResponse<Paciente>>(`/admin/pacientes/${id}`)
+  return response.data
+}
+
+export async function actualizarPacienteAdmin(id: number, datos: Partial<Paciente> & { psicologoId?: number }) {
+  const response = await api.put<ApiResponse<Paciente>>(`/admin/pacientes/${id}`, datos)
+  return response.data
+}

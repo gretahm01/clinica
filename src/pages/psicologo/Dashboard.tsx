@@ -23,8 +23,7 @@ import {
   completarCita, 
   confirmarCita,
   reagendarCita,
-  getNotificaciones,
-  marcarNotificacionesLeidas
+  getTodasLasTareas
 } from "../../services/api"
 
 // Funciones de ayuda
@@ -39,50 +38,6 @@ function colorEstado(estado: string) {
   }
 }
 
-function iconoNotificacion(tipo: string) {
-  switch (tipo) {
-    case "cita_solicitada":
-      return (
-        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        </div>
-      )
-    case "tarea_entregada":
-      return (
-        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-          </svg>
-        </div>
-      )
-    default:
-      return (
-        <div className="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </div>
-      )
-  }
-}
-
-function calcularTiempo(fechaStr: string) {
-  if (!fechaStr) return "Hace un momento";
-  const fecha = new Date(fechaStr);
-  const ahora = new Date();
-  const segundos = Math.floor((ahora.getTime() - fecha.getTime()) / 1000);
-  if (segundos < 60) return "Hace un momento";
-  const minutos = Math.floor(segundos / 60);
-  if (minutos < 60) return `Hace ${minutos} min`;
-  const horas = Math.floor(minutos / 60);
-  if (horas < 24) return `Hace ${horas} horas`;
-  const dias = Math.floor(horas / 24);
-  if (dias === 1) return "Ayer";
-  return `Hace ${dias} días`;
-}
-
 function obtenerMotivoLimpio(motivo: string) {
   if (!motivo) return "";
   return motivo.replace("[Paciente] ", "").replace("[Psicólogo] ", "");
@@ -92,8 +47,6 @@ function obtenerMotivoLimpio(motivo: string) {
 export default function Dashboard() {
   const [modalAbierto, setModalAbierto]           = useState(false)
   const [fechaSeleccionada, setFechaSeleccionada] = useState("")
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [notificaciones, setNotificaciones]       = useState<any[]>([])
   const [pacientes, setPacientes]                 = useState<Paciente[]>([])
   const [guardando, setGuardando]                 = useState(false)
   
@@ -117,6 +70,8 @@ export default function Dashboard() {
     apellido: string
     motivo?: string
   }[]>([])
+
+  const [tareasPendientes, setTareasPendientes] = useState<number>(0)
   
   const [eventosCitas, setEventosCitas] = useState<{
     id: string
@@ -127,8 +82,6 @@ export default function Dashboard() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     extendedProps: any
   }[]>([])
-
-  const noLeidas = notificaciones.filter(n => !n.leida).length
 
   const generarHorarios = () => {
     const horas = [];
@@ -147,11 +100,11 @@ export default function Dashboard() {
 
   async function cargarDatos() {
     try {
-      const [resCitas, resPacientes, resHoy, resNotif] = await Promise.all([
+      const [resCitas, resPacientes, resHoy, resTareas] = await Promise.all([
         getCitas(),
         getPacientes(),
         getCitasHoy(),
-        getNotificaciones()
+        getTodasLasTareas()
       ]);
 
       if (resCitas.success) {
@@ -175,9 +128,18 @@ export default function Dashboard() {
       }
       if (resPacientes.success) setPacientes(resPacientes.data)
       if (resHoy.success) setPacientesHoy(resHoy.data)
-      if (resNotif.success) setNotificaciones(resNotif.data)
-    } catch {
-      console.error("Error al cargar datos principales del dashboard")
+      
+      if (resTareas && resTareas.success && Array.isArray(resTareas.data)) {
+        const porRevisar = resTareas.data.filter((t: any) => {
+          const estadoLimpio = String(t.estado || "").toLowerCase().trim();
+          return estadoLimpio === 'entregada';
+        }).length;
+        
+        setTareasPendientes(porRevisar);
+      }
+
+    } catch (error) {
+      console.error("Error al cargar datos principales del dashboard", error)
     }
   }
 
@@ -326,22 +288,22 @@ export default function Dashboard() {
     }
   }
 
-  async function marcarTodasLeidas() {
-    await marcarNotificacionesLeidas();
-    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
-  } 
-
+  // === CÁLCULOS DE LAS TARJETAS ===
+  const hoyStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
   const mesActual = new Date().getMonth();
   const anioActual = new Date().getFullYear();
   
-  const confirmadasHoyCount = pacientesHoy.filter(p => p.estado === 'confirmada').length;
+  // Mantiene el número total de confirmadas, sin restarlas cuando se completan
+  const confirmadasHoyCount = pacientesHoy.filter(p => p.estado === 'confirmada' || p.estado === 'completada').length;
   
-  const citasEsteMesCount = eventosCitas.filter(cita => {
+  // Cuenta solo las que ya fueron finalizadas
+  const completadasHoyCount = pacientesHoy.filter(p => p.estado === 'completada').length;
+  
+  const completadasEsteMesCount = eventosCitas.filter(cita => {
+    if (cita.extendedProps.estado !== 'completada') return false;
     const fechaCita = new Date(cita.start);
     return fechaCita.getMonth() === mesActual && fechaCita.getFullYear() === anioActual;
   }).length;
-  
-  const citasRealizadasCount = eventosCitas.filter(cita => cita.extendedProps.estado === 'completada').length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -360,12 +322,12 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             
-            {/* TARJETA 1 */}
+            {/* TARJETA 1: Confirmadas por Hoy */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <span className="text-xs bg-emerald-50 text-emerald-600 font-medium px-2 py-0.5 rounded-full">Hoy</span>
@@ -374,35 +336,35 @@ export default function Dashboard() {
               <p className="text-xs text-slate-400 font-medium mt-1">Citas Confirmadas por Hoy</p>
             </div>
 
-            {/* TARJETA 2 */}
+            {/* TARJETA 2: Completadas por Hoy */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <span className="text-xs bg-blue-50 text-blue-500 font-medium px-2 py-0.5 rounded-full">Este Mes</span>
+                <span className="text-xs bg-blue-50 text-blue-500 font-medium px-2 py-0.5 rounded-full">Hoy</span>
               </div>
-              <p className="text-3xl font-bold text-dark">{citasEsteMesCount}</p>
-              <p className="text-xs text-slate-400 font-medium mt-1">Citas de Este Mes</p>
+              <p className="text-3xl font-bold text-dark">{completadasHoyCount}</p>
+              <p className="text-xs text-slate-400 font-medium mt-1">Citas Completadas Por Hoy</p>
             </div>
 
-            {/* TARJETA 3 */}
+            {/* TARJETA 3: Tareas por Revisar */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                 </div>
                 <span className="text-xs bg-rose-50 text-rose-500 font-medium px-2 py-0.5 rounded-full">Pendientes</span>
               </div>
-              <p className="text-3xl font-bold text-dark">0</p>
-              <p className="text-xs text-slate-400 font-medium mt-1">Tareas por Revisar</p>
+              <p className="text-3xl font-bold text-dark">{tareasPendientes}</p>
+              <p className="text-xs text-slate-400 font-medium mt-1">Tareas Por Revisar</p>
             </div>
 
-            {/* TARJETA 4 */}
+            {/* TARJETA 4: Completadas este mes */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
@@ -410,10 +372,10 @@ export default function Dashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <span className="text-xs bg-violet-50 text-violet-500 font-medium px-2 py-0.5 rounded-full">Completadas</span>
+                <span className="text-xs bg-violet-50 text-violet-500 font-medium px-2 py-0.5 rounded-full">Este Mes</span>
               </div>
-              <p className="text-3xl font-bold text-dark">{citasRealizadasCount}</p>
-              <p className="text-xs text-slate-400 font-medium mt-1">Citas Realizadas</p>
+              <p className="text-3xl font-bold text-dark">{completadasEsteMesCount}</p>
+              <p className="text-xs text-slate-400 font-medium mt-1">Citas Completadas en este mes</p>
             </div>
           </div>
 
@@ -432,6 +394,10 @@ export default function Dashboard() {
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-full bg-[#f87171] inline-block shadow-sm"></span>
                   Reagendada
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-[#60a5fa] inline-block shadow-sm"></span>
+                  Completada
                 </span>
               </div>
             </div>
@@ -457,42 +423,8 @@ export default function Dashboard() {
         </main>
 
         <aside className="w-72 min-h-screen bg-white border-l border-slate-100 flex flex-col flex-shrink-0 overflow-y-auto">
-          <div className="p-4 border-b border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-dark">Notificaciones</h3>
-                {noLeidas > 0 && (
-                  <span className="w-5 h-5 bg-rose-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                    {noLeidas}
-                  </span>
-                )}
-              </div>
-              {noLeidas > 0 && (
-                <button onClick={marcarTodasLeidas} className="text-xs text-primary hover:text-primary-hover font-medium transition-colors">
-                  Marcar Leídas
-                </button>
-              )}
-            </div>
-            
-            <div className="flex flex-col gap-2">
-              {notificaciones.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">No tienes notificaciones</p>
-              ) : (
-                notificaciones.map((notif) => (
-                  <div key={notif.id} className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${notif.leida ? "opacity-50" : "bg-slate-50"}`}>
-                    {iconoNotificacion(notif.tipo)}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-dark font-medium leading-snug">{notif.mensaje}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{calcularTiempo(notif.fecha)}</p>
-                    </div>
-                    {!notif.leida && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
 
-          <div className="p-4">
+          <div className="p-4 pt-6">
             <h3 className="text-sm font-bold text-dark mb-3">
               Citas de Hoy
               {pacientesHoy.length > 0 && <span className="text-xs text-slate-400 font-normal ml-1">({pacientesHoy.length})</span>}
@@ -520,13 +452,16 @@ export default function Dashboard() {
                           {paciente.nombre} {paciente.apellido}
                         </p>
                       </div>
+                      
                       <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase flex-shrink-0 ${
                         paciente.estado === "confirmada" ? "bg-emerald-100 text-emerald-600" : 
+                        paciente.estado === "completada" ? "bg-blue-100 text-blue-600" : 
                         paciente.estado === "reagendada" ? "bg-red-100 text-red-600" :
                         "bg-orange-100 text-orange-600"
                       }`}>
-                        {paciente.estado === "confirmada" ? "✓" : "•"}
+                        {paciente.estado === "confirmada" || paciente.estado === "completada" ? "✓" : "•"}
                       </span>
+
                     </div>
                   </div>
                 ))}

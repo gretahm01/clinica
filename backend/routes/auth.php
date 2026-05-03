@@ -33,7 +33,7 @@ if ($method === 'POST') {
                 "nombre" => $user['first_name'],
                 "apellido" => $user['last_name'],
                 "rol" => $user['role_name'],
-                "token" => "JWT_SIMULADO_" . bin2hex(random_bytes(16)) // Aquí iría tu generación de JWT real
+                "token" => base64_encode(json_encode(["userId" => $user['user_id'], "rol" => $user['role_name']]))
             ];
 
             // 3. TRUCO CLAVE: Si es paciente, buscamos su patient_id

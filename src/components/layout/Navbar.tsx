@@ -1,8 +1,8 @@
 // ===========================
 // src/components/layout/Navbar.tsx
 // ===========================
-// Barra de navegación superior del psicólogo.
-// Incluye: logo + barra de búsqueda + fecha + menú de usuario
+// Barra de navegación superior.
+// Incluye: logo clicable + fecha + menú de usuario
 // ===========================
 
 import { useState, useRef, useEffect } from "react"
@@ -15,7 +15,6 @@ export default function Navbar() {
 
   const [menuAbierto, setMenuAbierto]           = useState(false)
   const [modalCerrarSesion, setModalCerrarSesion] = useState(false)
-  const [busqueda, setBusqueda]                 = useState("")
 
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -40,55 +39,41 @@ export default function Navbar() {
     navigate("/login")
   }
 
+  // NUEVO: Función para redirigir según el rol del usuario
+  function irAlDashboard() {
+    if (usuario?.rol === "paciente") {
+      navigate("/paciente/dashboard")
+    } else if (usuario?.rol === "secretaria") {
+      navigate("/secretaria/dashboard")
+    } else if (usuario?.rol === "admin" || usuario?.rol === "administrador") {
+      navigate("/admin/dashboard") // Ajusta esto a tu ruta real de admin
+    } else {
+      // Por defecto al del psicólogo
+      navigate("/psicologo/dashboard")
+    }
+  }
+
   return (
     <>
-      <nav className="bg-white border-b border-slate-100 px-5 h-16 flex items-center gap-4 z-40 sticky top-0">
+      <nav className="bg-white border-b border-slate-100 px-5 h-16 flex items-center justify-between gap-4 z-40 sticky top-0">
 
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        {/* Logo (AHORA ES CLICABLE) */}
+        <button 
+          onClick={irAlDashboard} 
+          className="flex items-center gap-2.5 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+        >
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
           </div>
           <span className="font-bold text-dark text-lg tracking-tight">MedTrack</span>
-        </div>
-
-        {/* ===========================
-            BARRA DE BÚSQUEDA
-            Centrada entre logo y fecha.
-            Por ahora es visual — cuando PHP esté listo se conecta
-            a un endpoint de búsqueda global (pacientes, citas, etc.)
-            =========================== */}
-        <div className="flex-1 max-w-md mx-4">
-          <div className="relative">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar paciente, cita..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm text-dark placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-colors"
-            />
-            {/* Atajo de teclado decorativo */}
-            {!busqueda && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-300 font-mono hidden sm:block">
-                ⌘K
-              </span>
-            )}
-          </div>
-        </div>
+        </button>
 
         {/* Fecha de hoy */}
-        <div className="hidden lg:flex items-center gap-2 text-sm text-slate-400 flex-1 justify-center">
+        <div className="hidden lg:flex items-center gap-2 text-sm text-slate-400">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
           </svg>
           <span className="capitalize">{fechaHoy}</span>
         </div>
@@ -104,9 +89,10 @@ export default function Navbar() {
             </div>
             <div className="hidden sm:block text-left">
               <p className="text-sm font-semibold text-dark leading-none">
-                Dr. {usuario?.nombre} {usuario?.apellido}
+                {usuario?.rol === "admin" || usuario?.rol === "administrador" ? "" : "Dr. "} 
+                {usuario?.nombre} {usuario?.apellido}
               </p>
-              <p className="text-xs text-slate-400 mt-0.5">Psicólogo</p>
+              <p className="text-xs text-slate-400 mt-0.5 capitalize">{usuario?.rol || "Psicólogo"}</p>
             </div>
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -125,17 +111,22 @@ export default function Navbar() {
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">{usuario?.email}</p>
               </div>
-              <button
-                onClick={() => { navigate("/psicologo/perfil"); setMenuAbierto(false) }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <div className="w-7 h-7 bg-background rounded-lg flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                Mi perfil
-              </button>
+
+              {/* SOLUCIÓN: Si es admin o administrador, no renderizamos este botón */}
+              {usuario?.rol !== "admin" && usuario?.rol !== "administrador" && (
+                <button
+                  onClick={() => { navigate(`/${usuario?.rol === 'paciente' ? 'paciente' : 'psicologo'}/perfil`); setMenuAbierto(false) }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <div className="w-7 h-7 bg-background rounded-lg flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  Mi perfil
+                </button>
+              )}
+
               <button
                 onClick={() => { setMenuAbierto(false); setModalCerrarSesion(true) }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"

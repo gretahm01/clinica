@@ -68,9 +68,13 @@ export default function DetalleTarea() {
         setTarea(prev => prev ? { ...prev, estado: "revisada", comentarioTerapeuta: comentario } : prev)
         setGuardado(true)
         setTimeout(() => setGuardado(false), 3000)
+      } else {
+        alert(res.message || "Error al intentar marcar la tarea como revisada");
       }
-    } catch {
-      alert("Error de conexión al marcar como revisada")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      const mensaje = err.response?.data?.message || "Error crítico al comunicar con la base de datos";
+      alert("Error SQL: " + mensaje);
     } finally {
       setLoading(false)
     }
@@ -90,8 +94,10 @@ export default function DetalleTarea() {
       } else {
         alert(res.message ?? "Error al guardar comentario")
       }
-    } catch {
-      alert("Error de conexión al guardar el comentario")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      const mensaje = err.response?.data?.message || "Error al guardar el comentario";
+      alert("Error SQL: " + mensaje);
     } finally {
       setLoading(false)
     }

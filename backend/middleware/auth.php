@@ -9,31 +9,42 @@ function verificarToken() {
         exit();
     }
 
-    // Extraemos el token (quitamos la palabra 'Bearer ')
+    // Extraemos el token
     $token = str_replace('Bearer ', '', $authHeader);
 
-    // Por ahora, como estamos en desarrollo y el token es simulado, 
-    // solo verificamos que no esté vacío.
     if (empty($token)) {
         http_response_code(401);
         echo json_encode(["success" => false, "message" => "Token inválido"]);
         exit();
     }
 
-    // El sistema de login guarda los datos del usuario en el LocalStorage de React.
-    // React envía ese token aquí. En un sistema real, aquí decodificarías el JWT.
-    // Por ahora, asumimos que si hay token, el usuario es quien dice ser.
-    
-    // IMPORTANTE: Esta función debe retornar un array con los datos básicos
-    // para que los otros archivos sepan qué permisos dar.
+    // ==========================================
+    // ¡AQUÍ ESTÁ LA MAGIA!
+    // Desencriptamos el token para leer el ID real
+    // ==========================================
+    $decoded = base64_decode($token);
+    $userData = json_decode($decoded, true);
+
+    // Si el token es de los viejos "JWT_SIMULADO...", esto va a fallar y pedirá relogueo
+    if (!$userData || !isset($userData['userId'])) {
+        http_response_code(401);
+        echo json_encode(["success" => false, "message" => "Token expirado o corrupto. Vuelve a iniciar sesión."]);
+        exit();
+    }
+
+    // Retornamos los datos REALES del usuario que inició sesión
     return [
-        "userId" => 1, // Valor temporal, se usa para auditoría básica
-        "rol" => "psicologo" // Esto se sobrescribirá con el uso real
+        "userId" => (int)$userData['userId'],
+        "rol" => $userData['rol'] ?? 'paciente'
     ];
 }
 
 function verificarRol($usuario, $rolesPermitidos) {
-    // En esta etapa de desarrollo, permitiremos el acceso si el token existe.
-    // Más adelante, aquí compararás $usuario['rol'] con $rolesPermitidos.
+    // Ahora sí verificamos que el rol coincida
+    if (!in_array($usuario['rol'], $rolesPermitidos)) {
+        http_response_code(403);
+        echo json_encode(["success" => false, "message" => "No tienes permisos para esta acción"]);
+        exit();
+    }
     return true; 
 }

@@ -15,7 +15,7 @@ import {
   reagendarCita, 
   crearCita, 
   confirmarCita, 
-  actualizarTarea, // <-- Agregado para el nuevo modal
+  entregarTarea, // IMPORTAMOS LA NUEVA FUNCIÓN AQUÍ
   getNotificaciones, 
   marcarNotificacionesLeidas 
 } from "../../services/api"
@@ -75,7 +75,7 @@ export default function DashboardPaciente() {
   const [modalCitaAbierto, setModalCitaAbierto] = useState(false)
   const [citaSeleccionada, setCitaSeleccionada] = useState<Cita | null>(null)
   
-  // NUEVOS ESTADOS PARA TAREA EMERGENTE
+  // ESTADOS PARA TAREA EMERGENTE
   const [tareaSeleccionada, setTareaSeleccionada] = useState<Tarea | null>(null)
   const [textoEntrega, setTextoEntrega] = useState("")
   const [archivo, setArchivo] = useState<File | null>(null)
@@ -104,6 +104,7 @@ export default function DashboardPaciente() {
   }, [usuario]);
 
   async function obtenerDatosGenerales() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const idCorrecto = (usuario as any)?.pacienteId || (usuario as any)?.id || usuario?.userId;
     if (!idCorrecto) { 
       setCargando(false); 
@@ -124,7 +125,6 @@ export default function DashboardPaciente() {
     }
   }
 
-  // CITA LOGIC
   function abrirModalCita(cita: Cita) { 
     setCitaSeleccionada(cita); 
     setModoReagendar(false); 
@@ -182,7 +182,6 @@ export default function DashboardPaciente() {
     }
   }
 
-  // TAREA LOGIC
   function abrirModalTarea(tarea: Tarea) {
     setTareaSeleccionada(tarea);
     setTextoEntrega("");
@@ -190,6 +189,7 @@ export default function DashboardPaciente() {
     setErrorTarea("");
   }
 
+  // === NUEVA LÓGICA DE ENTREGA DE TAREAS ===
   async function handleEntregarTarea() {
     if (!textoEntrega.trim() && !archivo) {
       return setErrorTarea("Escribe algo o adjunta un archivo para entregar la tarea.");
@@ -199,13 +199,12 @@ export default function DashboardPaciente() {
     setErrorTarea("");
     
     try {
-      const res = await actualizarTarea(Number(tareaSeleccionada!.id), { 
-        estado: "entregada"
-      } as Partial<Tarea>);
+      const res = await entregarTarea(Number(tareaSeleccionada!.id), textoEntrega, archivo);
 
       if (res.success) {
         await obtenerDatosGenerales();
         setTareaSeleccionada(null);
+        alert("¡Tarea entregada con éxito!");
       } else {
         setErrorTarea(res.message || "No se pudo entregar la tarea.");
       }
@@ -238,18 +237,16 @@ export default function DashboardPaciente() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <NavbarPaciente />
       
       <div className="flex flex-1 overflow-hidden">
         <SidebarPaciente 
           citasTotales={citasProximas} 
           tareasTotales={tareasPendientesLista}
-          notificaciones={notificaciones}
           onNuevaCita={() => setModalCitaAbierto(true)} 
           onAbrirCita={abrirModalCita} 
-          onAbrirTarea={abrirModalTarea} // <-- Conectamos el click del sidebar al modal
-          onMarcarLeidas={async () => { await marcarNotificacionesLeidas(); obtenerDatosGenerales(); }}
+          onAbrirTarea={abrirModalTarea} 
         />
 
         <main className="flex-1 overflow-y-auto p-6">
@@ -346,11 +343,9 @@ export default function DashboardPaciente() {
         </main>
       </div>
 
-      {/* MODAL DETALLE DE CITA */}
       {citaSeleccionada && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setCitaSeleccionada(null)}>
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            
             <div className="flex justify-between items-start mb-4">
               <div>
                 <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase ${colorEstadoCita(citaSeleccionada.estado)}`}>
@@ -395,9 +390,6 @@ export default function DashboardPaciente() {
                         disabled={procesando} 
                         className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
                         Sí, Confirmar Asistencia
                       </button>
                     )}
@@ -480,7 +472,7 @@ export default function DashboardPaciente() {
         </div>
       )}
 
-      {/* NUEVO MODAL: ENTREGA RÁPIDA DE TAREA */}
+      {/* MODAL ENTREGA DE TAREAS */}
       {tareaSeleccionada && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setTareaSeleccionada(null)}>
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
@@ -572,6 +564,7 @@ export default function DashboardPaciente() {
           setProcesando(true);
           try {
             const motivoConEtiqueta = "[Paciente] " + (datos.motivo || "Solicito espacio");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const idCorrecto = (usuario as any)?.pacienteId || (usuario as any)?.id || usuario?.userId;
             
             const res = await crearCita({ 
@@ -582,6 +575,7 @@ export default function DashboardPaciente() {
               estado: "pendiente", 
               duracion: 60, 
               motivo: motivoConEtiqueta 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any);
             
             if (res.success) { 
